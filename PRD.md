@@ -1,6 +1,17 @@
 # Product Requirements Document (PRD)
 ## SEN Kanan – Sistem Penjualan Barang Otomotif Motor
 
+## Anggota Kelompok
+
+| Nama | NIM |
+|---|---|
+| Saka Laksmana Harimurti | 4525210067 |
+| Satria Mahardika | 4525210068 |
+| Muhammad Raffif Akbar | 4525210125 |
+| Ridho Sachlan | 4525210066 |
+| Prevansyah Sjafar | 4525210057 |
+| Nabil Nugraha Syamjdaya| 4525210052 |
+
 | | |
 |---|---|
 | **Tanggal** | 1 November 2026 |
