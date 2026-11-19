@@ -1,0 +1,39 @@
+@startuml
+title Sequence Diagram - Checkout & Pembayaran Virtual Account
+
+actor "Pelanggan" as Pelanggan
+participant "CheckoutView" as CheckoutView
+participant "App (state)" as AppState
+participant "Modal Konfirmasi" as ModalKonfirmasi
+
+Pelanggan -> CheckoutView : Buka Checkout dari keranjang
+CheckoutView --> Pelanggan : Tampilkan alamat, barang, pilihan pengiriman, bank VA
+
+Pelanggan -> CheckoutView : Pilih kurir (JNE REG / JNE YES)
+CheckoutView -> AppState : setShippingMethod(reg | yes)
+
+Pelanggan -> CheckoutView : Atur asuransi, isi catatan (maks 200)
+CheckoutView -> AppState : setWithInsurance / setOrderNote
+
+Pelanggan -> CheckoutView : Pilih bank VA (BCA / BNI / Mandiri)
+CheckoutView -> AppState : setSelectedVAId(bank)
+AppState --> CheckoutView : nomor VA 16 digit bank terpilih
+
+CheckoutView --> Pelanggan : Ringkasan: subtotal + ongkir + asuransi + biaya layanan Rp1.000
+
+Pelanggan -> CheckoutView : Klik "Bayar Sekarang"
+CheckoutView -> AppState : onOpenPaymentModal()
+AppState -> ModalKonfirmasi : tampilkan bank, no. VA, total pembayaran
+
+Pelanggan -> ModalKonfirmasi : Transfer ke VA (di luar sistem), klik "Konfirmasi Pembayaran"
+ModalKonfirmasi -> AppState : tutup modal; handleCheckoutSubmit()
+
+alt keranjang tidak kosong
+    AppState --> CheckoutView : setCurrentOrder(tahap DIBUAT, VA, alamat, ...)
+    AppState -> AppState : generateAllVA() -> nomor VA baru
+    AppState --> Pelanggan : Pindah ke tab Pesanan + toast "Pesanan berhasil dibuat"
+else keranjang kosong
+    AppState --> ModalKonfirmasi : tombol nonaktif, tidak ada pesanan dibuat
+end
+
+@enduml

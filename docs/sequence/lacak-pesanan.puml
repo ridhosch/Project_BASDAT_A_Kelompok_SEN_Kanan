@@ -1,0 +1,21 @@
+@startuml
+title Sequence Diagram - Melacak Status Pesanan
+
+actor "Pelanggan" as Pelanggan
+participant "PesananView" as PesananView
+participant "App (state)" as AppState
+
+Pelanggan -> AppState : Klik tombol "Pesanan"
+AppState -> PesananView : navigateTo("pesanan") -> tampilkan PesananView(currentOrder)
+
+PesananView --> Pelanggan : Nomor pesanan, tahap (4 langkah), kurir & resi, estimasi tiba
+PesananView --> Pelanggan : Barang pesanan, alamat pengiriman, rincian pembayaran VA
+
+opt klik "Pratinjau tahap" (demo)
+    Pelanggan -> PesananView : Pilih tahap Dibuat / Diproses / Dikirim / Tiba
+    PesananView -> AppState : setOrderStage(tahap)
+    AppState --> PesananView : tahap & resi diperbarui (resi tampil mulai DIKIRIM)
+    PesananView --> Pelanggan : Timeline diperbarui
+end
+
+@enduml
