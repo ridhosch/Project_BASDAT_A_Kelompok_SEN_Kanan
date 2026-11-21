@@ -1,0 +1,162 @@
+@startuml
+title ERD – SEN Kanan (model data sesuai program senkanan-app & senkanan-admin)
+hide circle
+skinparam linetype ortho
+
+entity motor_pengguna #E6DDF5 {
+  * id_motor : INT <<PK>>
+  --
+  # id_pelanggan : INT <<FK>>
+  nama_pemilik : VARCHAR
+  merek : VARCHAR
+  tipe_model : VARCHAR
+  plat_nomor : VARCHAR
+}
+
+entity alamat_pengiriman #D6EAFB {
+  * id_alamat : INT <<PK>>
+  --
+  # id_pelanggan : INT <<FK>>
+  label : VARCHAR
+  nama_penerima : VARCHAR
+  no_hp : VARCHAR
+  email : VARCHAR
+  alamat_lengkap : TEXT
+  catatan : VARCHAR
+}
+
+entity pelanggan #D6EAFB {
+  * id_pelanggan : INT <<PK>>
+  --
+  nama : VARCHAR
+  email : VARCHAR <<UQ>>
+  no_hp : VARCHAR
+}
+
+entity keranjang #D6EAFB {
+  * id_keranjang : INT <<PK>>
+  --
+  # id_pelanggan : INT <<FK>>
+  # id_produk : INT <<FK>>
+  jumlah : INT
+}
+
+entity favorit #D6EAFB {
+  * id_pelanggan : INT <<PK,FK>>
+  * id_produk : INT <<PK,FK>>
+}
+
+entity produk #FDE3C8 {
+  * id_produk : INT <<PK>>
+  --
+  # id_kategori : INT <<FK>>
+  sku : VARCHAR <<UQ>>
+  nama_produk : VARCHAR
+  spesifikasi : VARCHAR
+  label : VARCHAR, null
+  kecocokan : TEXT
+  deskripsi : TEXT
+  harga : DECIMAL
+  stok : INT
+  gambar : VARCHAR
+}
+
+entity kategori_produk #FDE3C8 {
+  * id_kategori : INT <<PK>>
+  --
+  nama_kategori : VARCHAR
+  deskripsi : VARCHAR
+  ikon : VARCHAR
+}
+
+entity riwayat_stok #FDE3C8 {
+  * id_riwayat : INT <<PK>>
+  --
+  # id_produk : INT <<FK>>
+  # id_admin : INT <<FK>>
+  jumlah : INT
+  catatan : VARCHAR
+  waktu : DATETIME
+}
+
+entity admin #CDEDE6 {
+  * id_admin : INT <<PK>>
+  --
+  nama_admin : VARCHAR
+  email : VARCHAR <<UQ>>
+  kata_sandi : VARCHAR (hash)
+}
+
+entity pesanan #DCEFDC {
+  * id_pesanan : INT <<PK>>
+  --
+  nomor_pesanan : VARCHAR <<UQ>>
+  # id_pelanggan : INT <<FK>>
+  tanggal_pesanan : DATETIME
+  tahap : VARCHAR
+  biaya_layanan : DECIMAL
+  total : DECIMAL
+  catatan : VARCHAR
+  waktu_diproses : DATETIME
+  waktu_dikirim : DATETIME
+  waktu_tiba : DATETIME
+}
+
+entity detail_pesanan #DCEFDC {
+  * id_pesanan : INT <<PK,FK>>
+  * id_produk : INT <<PK,FK>>
+  --
+  jumlah : INT
+  harga_satuan : DECIMAL
+}
+
+entity pengiriman #DCEFDC {
+  * id_pengiriman : INT <<PK>>
+  --
+  # id_pesanan : INT <<FK>>
+  nama_penerima : VARCHAR
+  no_hp_penerima : VARCHAR
+  email_penerima : VARCHAR
+  alamat_lengkap : TEXT
+  catatan_alamat : VARCHAR
+  kurir : VARCHAR
+  ongkir : DECIMAL
+  asuransi : DECIMAL
+  no_resi : VARCHAR, null
+  estimasi_awal : DATE
+  estimasi_akhir : DATE
+}
+
+entity pembayaran #DCEFDC {
+  * id_pembayaran : INT <<PK>>
+  --
+  # id_pesanan : INT <<FK>>
+  # id_admin : INT, null <<FK>>
+  bank : VARCHAR
+  no_va : CHAR(16)
+  jumlah : DECIMAL
+  status : VARCHAR
+  waktu_bayar : DATETIME
+  waktu_konfirmasi : DATETIME
+  catatan_admin : VARCHAR
+}
+
+pelanggan ||--o{ motor_pengguna
+pelanggan ||--o{ alamat_pengiriman
+pelanggan ||--o{ keranjang
+pelanggan ||--o{ favorit
+pelanggan ||--o{ pesanan
+
+produk ||--o{ keranjang
+produk ||--o{ favorit
+produk ||--o{ detail_pesanan
+produk ||--o{ riwayat_stok
+kategori_produk ||--o{ produk
+
+pesanan ||--o{ detail_pesanan
+pesanan ||--|| pengiriman
+pesanan ||--|| pembayaran
+
+admin ||--o{ riwayat_stok
+admin |o--o{ pembayaran
+@enduml
