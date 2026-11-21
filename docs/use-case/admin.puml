@@ -1,0 +1,52 @@
+@startuml
+left to right direction
+skinparam packageStyle rectangle
+
+actor Admin
+
+rectangle "Sistem Penjualan SEN Kanan" {
+  usecase "Masuk (login admin)" as UC_Login
+  usecase "Keluar" as UC_Logout
+  usecase "Lihat manajemen stok" as UC_ManajemenStok
+  usecase "Tambah stok" as UC_TambahStok
+  usecase "Ekspor stok (CSV)" as UC_EksporStok
+  
+  usecase "Lihat daftar pesanan" as UC_DaftarPesanan
+  usecase "Lihat detail pesanan" as UC_DetailPesanan
+  usecase "Proses pesanan (syarat: pembayaran LUNAS)" as UC_ProsesPesanan
+  usecase "Kirim pesanan (buat nomor resi)" as UC_KirimPesanan
+  usecase "Batalkan pesanan (hapus dari daftar)" as UC_BatalPesanan
+  
+  usecase "Lihat daftar pembayaran" as UC_DaftarPembayaran
+  usecase "Konfirmasi pembayaran" as UC_KonfBayar
+  usecase "Tolak pembayaran" as UC_TolakBayar
+
+  ' Relasi Admin
+  Admin --> UC_Login
+  Admin --> UC_Logout
+  Admin --> UC_ManajemenStok
+  Admin --> UC_DaftarPesanan
+  Admin --> UC_DaftarPembayaran
+
+  ' Relasi Extend untuk Stok
+  UC_TambahStok ..> UC_ManajemenStok : <<extend>>
+  UC_EksporStok ..> UC_ManajemenStok : <<extend>>
+
+  ' Relasi Extend untuk Pesanan
+  UC_DetailPesanan ..> UC_DaftarPesanan : <<extend>>
+  UC_ProsesPesanan ..> UC_DetailPesanan : <<extend>>
+  UC_KirimPesanan ..> UC_DetailPesanan : <<extend>>
+  UC_BatalPesanan ..> UC_DetailPesanan : <<extend>>
+
+  ' Relasi Extend untuk Pembayaran
+  UC_KonfBayar ..> UC_DaftarPembayaran : <<extend>>
+  UC_TolakBayar ..> UC_DaftarPembayaran : <<extend>>
+}
+
+note bottom of Admin
+Catatan: login admin pada program berupa pratinjau 
+(email & kata sandi apa saja diterima). Dari detail pesanan, 
+admin dapat langsung membuka halaman konfirmasi pembayaran.
+end note
+
+@enduml
