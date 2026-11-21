@@ -1,0 +1,202 @@
+@startuml
+title Class Diagram – SEN Kanan (kelas domain sesuai program)
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+
+class MotorPengguna #E6DDF5 {
+  - idMotor: int
+  - idPelanggan: int
+  - namaPemilik: String
+  - merek: String
+  - tipeModel: String
+  - platNomor: String
+  --
+  + simpan()
+  + validasi(): boolean
+}
+
+class AlamatPengiriman #D6EAFB {
+  - idAlamat: int
+  - idPelanggan: int
+  - label: String
+  - namaPenerima: String
+  - noHp: String
+  - email: String
+  - alamatLengkap: String
+  - catatan: String
+  --
+  + ubah()
+}
+
+class Pelanggan #D6EAFB {
+  - idPelanggan: int
+  - nama: String
+  - email: String
+  - noHp: String
+  --
+  + simpanMotor()
+  + ubahAlamat()
+  + lihatPesanan()
+}
+
+class Keranjang #D6EAFB {
+  - idKeranjang: int
+  - idPelanggan: int
+  - idProduk: int
+  - jumlah: int
+  --
+  + tambahItem(jumlah)
+  + ubahJumlah(delta)
+  + hapusItem()
+  + hitungSubtotal(): double
+}
+
+class Favorit #D6EAFB {
+  - idPelanggan: int
+  - idProduk: int
+  --
+  + toggle()
+}
+
+class Produk #FDE3C8 {
+  - idProduk: int
+  - idKategori: int
+  - sku: String
+  - namaProduk: String
+  - spesifikasi: String
+  - label: String
+  - kecocokan: String
+  - deskripsi: String
+  - harga: double
+  - stok: int
+  - gambar: String
+  --
+  + statusStok(): String
+  + tambahStok(jumlah)
+  + cocokDengan(kataKunci): boolean
+}
+
+class KategoriProduk #FDE3C8 {
+  - idKategori: int
+  - namaKategori: String
+  - deskripsi: String
+  - ikon: String
+  --
+  + getProduk(): List
+}
+
+class RiwayatStok #FDE3C8 {
+  - idRiwayat: int
+  - idProduk: int
+  - idAdmin: int
+  - jumlah: int
+  - catatan: String
+  - waktu: DateTime
+  --
+  + catat()
+}
+
+class Admin #CDEDE6 {
+  - idAdmin: int
+  - namaAdmin: String
+  - email: String
+  - kataSandi: String
+  --
+  + masuk()
+  + keluar()
+  + tambahStok()
+  + eksporStok()
+  + prosesPesanan()
+  + kirimPesanan()
+  + batalkanPesanan()
+  + konfirmasiPembayaran()
+  + tolakPembayaran()
+}
+
+class Pesanan #DCEFDC {
+  - idPesanan: int
+  - nomorPesanan: String
+  - idPelanggan: int
+  - tanggalPesanan: DateTime
+  - tahap: TahapPesanan
+  - biayaLayanan: double
+  - total: double
+  - catatan: String
+  - waktuDiproses: DateTime
+  - waktuDikirim: DateTime
+  - waktuTiba: DateTime
+  --
+  + buatPesanan()
+  + hitungSubtotal(): double
+  + hitungTotal(): double
+  + majukanTahap()
+  + batalkan()
+}
+
+class DetailPesanan #DCEFDC {
+  - idPesanan: int
+  - idProduk: int
+  - jumlah: int
+  - hargaSatuan: double
+  --
+  + hitungTotalHarga(): double
+}
+
+class Pengiriman #DCEFDC {
+  - idPengiriman: int
+  - idPesanan: int
+  - namaPenerima: String
+  - noHpPenerima: String
+  - emailPenerima: String
+  - alamatLengkap: String
+  - catatanAlamat: String
+  - kurir: String
+  - ongkir: double
+  - asuransi: double
+  - noResi: String
+  - estimasiAwal: Date
+  - estimasiAkhir: Date
+  --
+  + pilihKurir(kode)
+  + hitungOngkir(): double
+  + buatResi()
+}
+
+class Pembayaran #DCEFDC {
+  - idPembayaran: int
+  - idPesanan: int
+  - idAdmin: int [0..1]
+  - bank: String
+  - noVA: String
+  - jumlah: double
+  - status: StatusBayar
+  - waktuBayar: DateTime
+  - waktuKonfirmasi: DateTime
+  - catatanAdmin: String
+  --
+  + buatNomorVA(bank)
+  + konfirmasiBayar()
+  + konfirmasi(catatan)
+  + tolak(catatan)
+}
+
+Pelanggan "1" -- "0..*" MotorPengguna : memiliki
+Pelanggan "1" -- "0..*" AlamatPengiriman : memiliki
+Pelanggan "1" -- "0..*" Keranjang : menyimpan
+Pelanggan "1" -- "0..*" Favorit : menandai
+Pelanggan "1" -- "0..*" Pesanan : membuat
+
+Produk "1" -- "0..*" Keranjang : masukkan
+Produk "1" -- "0..*" Favorit : difavoritkan
+Produk "0..*" -- "1" KategoriProduk : mengelompokkan
+Produk "1" -- "0..*" RiwayatStok : dicatat
+Produk "1" -- "0..*" DetailPesanan : dipesan
+
+RiwayatStok "0..*" -- "1" Admin : mencatat
+
+Pesanan "1" *-- "1..*" DetailPesanan : terdiri dari
+Pesanan "1" -- "1" Pengiriman : dikirim lewat
+Pesanan "1" -- "1" Pembayaran : dibayar lewat
+
+Pembayaran "0..*" -- "0..1" Admin : mengonfirmasi
+@enduml
