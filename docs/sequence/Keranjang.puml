@@ -1,0 +1,25 @@
+@startuml Seq_Keranjang
+title Sequence Diagram – Mengelola Keranjang
+
+actor Pelanggan
+participant KeranjangView
+participant "App (state)" as App
+
+Pelanggan -> App : Klik ikon keranjang
+App -> KeranjangView : tampilkan KeranjangView
+
+alt keranjang berisi
+    KeranjangView --> Pelanggan : Tampilkan barang, subtotal, ringkasan belanja
+    Pelanggan -> KeranjangView : Klik + / −
+    KeranjangView -> App : updateCartQty(id_produk, delta)
+    App --> KeranjangView : jumlah diperbarui (min 1), total dihitung ulang
+    Pelanggan -> KeranjangView : Klik "Hapus"
+    KeranjangView -> App : removeCartItem(id_produk)
+    App --> KeranjangView : item dihapus
+    Pelanggan -> KeranjangView : Klik "Lanjut ke Checkout"
+    KeranjangView -> App : navigateTo("checkout")
+else keranjang kosong
+    KeranjangView --> Pelanggan : Tampilkan "Keranjang masih kosong" + tombol Mulai belanja
+end
+
+@enduml

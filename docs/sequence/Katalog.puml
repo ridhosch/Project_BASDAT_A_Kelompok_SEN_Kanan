@@ -1,0 +1,22 @@
+@startuml Seq_Katalog
+title Sequence Diagram – Menelusuri Katalog, Mencari & Favorit
+
+actor Pelanggan
+participant KatalogView
+participant "App (state)" as App
+
+Pelanggan -> App : Klik menu "Katalog" / ketik di kolom cari
+App -> KatalogView : tampilkan KatalogView
+Pelanggan -> KatalogView : Pilih kategori / ketik kata kunci / pilih urutan
+KatalogView -> App : setSelectedCategory / setSearchQuery / setSortBy
+App --> KatalogView : state diperbarui
+KatalogView --> Pelanggan : Filter (judul, spesifikasi, kategori, kecocokan) lalu urutkan, tampilkan kartu produk
+
+opt klik ikon hati
+    Pelanggan -> KatalogView : Klik ikon hati pada produk
+    KatalogView -> App : toggleWishlist(id_produk)
+    App --> KatalogView : daftar favorit diperbarui
+    KatalogView --> Pelanggan : Ikon hati berubah
+end
+
+@enduml

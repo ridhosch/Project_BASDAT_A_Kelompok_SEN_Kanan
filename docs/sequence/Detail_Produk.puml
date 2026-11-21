@@ -1,0 +1,26 @@
+@startuml Seq_Detail_Produk
+title Sequence Diagram – Detail Produk & Tambah ke Keranjang
+
+actor Pelanggan
+participant ProductDetailModal
+participant "App (state)" as App
+
+Pelanggan -> ProductDetailModal : Klik "Lihat Detail"
+ProductDetailModal -> App : setSelectedProduct(produk)
+ProductDetailModal --> Pelanggan : Tampilkan kecocokan, deskripsi, harga, pengatur jumlah
+Pelanggan -> ProductDetailModal : Ubah jumlah (+ / −)
+ProductDetailModal --> Pelanggan : Jumlah diperbarui (minimal 1)
+Pelanggan -> ProductDetailModal : Klik "Tambah ke keranjang"
+ProductDetailModal -> App : addToCart(id_produk, jumlah)
+
+alt produk sudah ada di keranjang
+    App --> ProductDetailModal : jumlah item ditambah
+else produk belum ada
+    App --> ProductDetailModal : item baru ditambahkan
+end
+
+App --> Pelanggan : Toast: "... ditambahkan ke keranjang"
+Pelanggan -> ProductDetailModal : Tutup (✕ / Esc)
+ProductDetailModal -> App : setSelectedProduct(null)
+
+@enduml
