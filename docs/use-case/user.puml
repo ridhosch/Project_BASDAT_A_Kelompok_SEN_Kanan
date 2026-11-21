@@ -1,0 +1,54 @@
+@startuml
+left to right direction
+skinparam packageStyle rectangle
+
+actor Pelanggan
+
+rectangle "Sistem Penjualan SEN Kanan" {
+  usecase "Lihat beranda (kategori & produk unggulan)" as UC_Beranda
+  usecase "Cari, filter kategori & urutkan produk" as UC_CariProduk
+  usecase "Lihat katalog produk" as UC_Katalog
+  usecase "Lihat detail produk & tambah ke keranjang" as UC_DetailProduk
+  usecase "Kelota favorit (wishlist)" as UC_Wishlist
+  
+  usecase "Kelola keranjang belanja" as UC_Keranjang
+  usecase "Daftarkan data motor (Motor Saya)" as UC_DataMotor
+  
+  usecase "Checkout pesanan" as UC_Checkout
+  usecase "Ubah alamat pengiriman" as UC_UbahAlamat
+  usecase "Pilih bank VA & konfirmasi pembayaran" as UC_PilihVA
+  
+  usecase "Lacak status pesanan" as UC_LacakPesanan
+  usecase "Konsultasi kecocokan part (WhatsApp)" as UC_KonsulWA
+  usecase "Baca informasi toko (panduan, ongkir, retur, dll.)" as UC_InfoToko
+
+  ' Relasi Pelanggan
+  Pelanggan --> UC_Beranda
+  Pelanggan --> UC_Katalog
+  Pelanggan --> UC_Keranjang
+  Pelanggan --> UC_DataMotor
+  Pelanggan --> UC_Checkout
+  Pelanggan --> UC_LacakPesanan
+  Pelanggan --> UC_KonsulWA
+  Pelanggan --> UC_InfoToko
+
+  ' Relasi Extend & Include pada Beranda / Katalog
+  UC_CariProduk ..> UC_Beranda : <<extend>>
+  UC_DetailProduk ..> UC_Katalog : <<extend>>
+  UC_Wishlist ..> UC_Katalog : <<extend>>
+  
+  ' Relasi Generalisasi/Arah keranjang (sesuai gambar panah putus-putus ke atas)
+  ' Menunjukkan keterkaitan manajemen keranjang
+  
+  ' Relasi Extend & Include pada Checkout
+  UC_UbahAlamat ..> UC_Checkout : <<extend>>
+  UC_PilihVA ..> UC_Checkout : <<include>>
+}
+
+note bottom of Pelanggan
+Catatan: program toko tidak memiliki registrasi/login pelanggan. 
+Pembayaran lewat Virtual Account dilakukan di luar sistem (transfer bank), 
+lalu pelanggan menekan "Konfirmasi Pembayaran".
+end note
+
+@enduml
