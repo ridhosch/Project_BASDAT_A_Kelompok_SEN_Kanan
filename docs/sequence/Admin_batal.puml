@@ -1,0 +1,21 @@
+@startuml
+title Sequence Diagram - Admin Membatalkan Pesanan
+
+actor "Admin" as Admin
+participant "OrdersPage" as OrdersPage
+participant "App (state)" as AppState
+
+Admin -> OrdersPage : Klik "Batalkan" pada pesanan
+OrdersPage --> Admin : Dialog konfirmasi pembatalan (setCancelTarget)
+
+alt admin mengonfirmasi
+    Admin -> OrdersPage : Konfirmasi pembatalan
+    OrdersPage -> AppState : onCancelOrder(id_pesanan)
+    AppState --> OrdersPage : hapus pesanan dari daftar, pilih pesanan lain
+    OrdersPage --> Admin : Toast: "Pesanan ... dibatalkan dan dihapus"
+else admin menutup dialog / Esc
+    Admin -> OrdersPage : Tutup dialog
+    OrdersPage --> Admin : setCancelTarget(null)
+end
+
+@enduml

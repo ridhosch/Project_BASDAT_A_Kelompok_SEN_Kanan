@@ -1,0 +1,23 @@
+@startuml
+title Sequence Diagram - Mengubah Alamat Pengiriman
+
+actor "Pelanggan" as Pelanggan
+participant "Keranjang / Checkout\nView" as CheckoutView
+participant "App (state)" as AppState
+
+Pelanggan -> CheckoutView : Klik "Ubah" pada Profil & alamat
+CheckoutView -> AppState : onStartEditAddress()
+AppState --> CheckoutView : setAddressDraft(alamat); setIsEditingAddress(true)
+CheckoutView --> Pelanggan : Tampilkan dialog "Ubah Alamat Pengiriman"
+
+Pelanggan -> CheckoutView : Isi nama penerima, telepon, alamat, catatan
+
+alt klik "Simpan" & kolom wajib terisi
+    CheckoutView -> AppState : setAddress(draft)
+    CheckoutView --> AppState : setIsEditingAddress(false)
+    CheckoutView --> Pelanggan : Toast: "Alamat pengiriman diperbarui"
+else klik X / Esc
+    CheckoutView --> AppState : setIsEditingAddress(false)
+end
+
+@enduml

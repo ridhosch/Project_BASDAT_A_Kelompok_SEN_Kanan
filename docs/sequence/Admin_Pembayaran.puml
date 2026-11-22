@@ -1,0 +1,33 @@
+@startuml
+title Sequence Diagram - Admin Mengonfirmasi / Menolak Pembayaran VA
+
+actor "Admin" as Admin
+participant "PaymentsPage" as PaymentsPage
+participant "App (state)" as AppState
+
+Admin -> PaymentsPage : Buka "Konfirmasi pembayaran" (atau dari detail pesanan)
+PaymentsPage --> Admin : Ringkasan + daftar pembayaran (tab Menunggu)
+
+Admin -> PaymentsPage : Cari no. pesanan / nama / no. VA, pilih tab
+PaymentsPage --> Admin : Daftar pembayaran terfilter
+
+Admin -> PaymentsPage : Pilih pembayaran
+PaymentsPage --> Admin : Tampilkan bank, no. VA (salin), nominal
+
+alt status = MENUNGGU
+    Admin -> PaymentsPage : Cek mutasi VA: centang "nominal sesuai" & "mutasi ditemukan", isi catatan
+
+    alt kedua centang terisi, klik "Konfirmasi pembayaran"
+        PaymentsPage -> AppState : onDecide(id_pesanan, LUNAS, catatan)
+        AppState --> PaymentsPage : status LUNAS + waktu konfirmasi
+        PaymentsPage --> Admin : Toast: "Pembayaran ... dikonfirmasi. Pesanan siap diproses"
+    else klik "Tolak pembayaran"
+        PaymentsPage -> AppState : onDecide(id_pesanan, DITOLAK, catatan)
+        AppState --> PaymentsPage : status DITOLAK + catatan
+        PaymentsPage --> Admin : Toast: "Pembayaran ... ditolak"
+    end
+else status LUNAS / DITOLAK
+    PaymentsPage --> Admin : Tampilkan hasil & catatan (tanpa aksi)
+end
+
+@enduml
