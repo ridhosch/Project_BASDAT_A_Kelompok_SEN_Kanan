@@ -1,261 +1,245 @@
 # Product Requirements Document (PRD)
-## SEN Kanan – Sistem Penjualan Barang Otomotif Motor
+## SEN Kanan – Sistem Penjualan Suku Cadang & Aksesori Motor
 
 ## Anggota Kelompok
 
-| Nama | NIM |
-|---|---|
-| Saka Laksmana Harimurti | 4525210067 |
-| Satria Mahardika | 4525210068 |
-| Muhammad Raffif Akbar | 4525210125 |
-| Ridho Sachlan | 4525210066 |
-| Prevansyah Sjafar | 4525210057 |
-| Nabil Nugraha Syamjdaya| 4525210052 |
+| No. | Nama | NIM |
+|---|---|---|
+| 1 | Saka Laksmana Harimurti | 4525210067 |
+| 2 | Satria Mahardika | 4525210068 |
+| 3 | Muhammad Raffif Akbar | 4525210125 |
+| 4 | Ridho Sachlan | 4525210066 |
+| 5 | Prevansyah Sjafar | 4525210057 |
+| 6 | Nabil Nugraha Syamjdaya | 4525210052 |
 
 | | |
 |---|---|
-| **Tanggal** | 1 November 2026 |
-| **Status** | Draft untuk review |
-| **Platform** | Web (desktop-first) |
-| **Dokumen terkait** | ERD, Use Case, Sequence, dan Class Diagram, Desain Figma  |
+| **Tanggal** | November 2026 |
+| **Status** | Final  |
+| **Platform** | Web (Aplikasi Pelanggan `senkanan-app` & Panel Operasional `admin`) |
+| **Dokumen & Desain Terkait** | ERD (`erd_senkanan.puml`), Skema SQL (`senkanan.sql`), Class Diagram, Use Case Diagram, 12 Sequence Diagram, & [Desain Figma SEN Kanan](https://www.figma.com/design/MY9sEsMFEnJyxbBtzfWnRF/Kelompok-SEN-Kanan?node-id=0-1&t=u6LFxmPz3hAPL0eb-1) |
 
 ---
 
 ## 1. Ringkasan
 
-SEN Kanan adalah toko online untuk menjual barang otomotif motor (suku cadang dan aksesori). Pelanggan dapat menelusuri katalog, memasukkan barang ke keranjang, melakukan checkout, membayar dengan **kartu debit**, dan memantau status pesanan. Admin mengelola data motor, produk, stok, verifikasi pembayaran, dan status pesanan.
+**SEN Kanan** adalah platform web e-commerce untuk penjualan barang otomotif motor (suku cadang dan aksesori) yang terdiri dari dua antarmuka terpisah—**Aplikasi Pelanggan (`senkanan-app`)** dan **Panel Admin (`admin`)**—yang terhubung ke satu **Backend REST API (Node.js + Express)** dan basis data relasional **MySQL (`senkanan`)**.
 
-Pelanggan juga dapat menyimpan data motor miliknya (merek, model, tahun, plat nomor) sebagai dasar pengembangan fitur rekomendasi produk yang cocok di tahap berikutnya.
+Pelanggan dapat menjelajahi katalog produk berdasarkan kategori maupun kata kunci, menyimpan produk favorit (*wishlist*), mendaftarkan data motor (*Motor Saya*), mengatur alamat pengiriman, mengelola keranjang belanja, melakukan checkout dengan opsi kurir **JNE REG / JNE YES** serta asuransi, membayar menggunakan **Virtual Account (BCA, BNI, Mandiri)**, hingga melacak progres status pesanan secara transparan. Di sisi operasional, Admin dapat mengelola stok produk beserta riwayat mutasi stok, mengekspor laporan stok ke CSV, memverifikasi atau menolak mutasi pembayaran Virtual Account, serta memproses, mengirim (input nomor resi), hingga membatalkan pesanan.
 
 ## 2. Latar Belakang & Masalah
 
-- Pembelian barang motor secara manual (WhatsApp, datang ke toko) membuat pencatatan pesanan, stok, dan pembayaran tidak terpusat.
-- Stok sering tidak sinkron dengan penjualan karena tidak ada catatan mutasi.
-- Pelanggan sulit melihat status pesanan dan estimasi barang tiba.
+- Pembelian suku cadang motor secara konvensional (chat manual atau datang langsung) menyebabkan pencatatan pesanan, alamat pengiriman, dan mutasi stok tidak terpusat.
+- Pembeli sering kesulitan memastikan kecocokan suku cadang (*compatibility*) dengan spesifikasi tipe motor yang dimiliki.
+- Kurangnya visibilitas status stok (*Tersedia*, *Terbatas*, *Habis*) dan pelacakan tahapan pengiriman membuat pelanggan harus menanyakan status pesanan secara manual.
+- Verifikasi bukti transfer pembayaran memerlukan pencocokan nominal dan mutasi bank yang terstruktur agar tidak terjadi kesalahan pengiriman barang.
 
-## 3. Tujuan 
+## 3. Tujuan
 
-1. Pelanggan dapat menyelesaikan pembelian (katalog → keranjang → checkout → bayar) tanpa bantuan manual.
-2. Stok produk selalu akurat dan setiap perubahannya tercatat (`mutasi_stok`).
-3. Admin dapat memproses pesanan dan memverifikasi pembayaran dari satu panel.
-4. Pelanggan dapat melacak status pesanan dan estimasi tiba.
+1. Menyediakan alur belanja mandiri bagi pelanggan mulai dari pencarian katalog, manajemen keranjang, hingga checkout Virtual Account tanpa hambatan.
+2. Menjaga akurasi stok secara otomatis melalui pengurangan stok saat checkout serta pencatatan riwayat mutasi (`riwayat_stok`) setiap kali admin menambah stok.
+3. Menyediakan panel admin terpadu untuk verifikasi pembayaran VA, pembaruan tahapan pesanan, penerbitan nomor resi, dan pemantauan stok.
+4. Memberikan transparansi informasi kecocokan motor, rincian biaya (subtotal, ongkir, asuransi, biaya layanan), dan pelacakan progres 4 tahap pesanan.
 
+## 4. Pengguna & Aktor Sistem
 
-## 4. Pengguna
+Berdasarkan Use Case Diagram (`user.puml` dan `admin.puml`):
 
-| Peran | Deskripsi | Kebutuhan utama |
+| Peran | Deskripsi | Kebutuhan Utama |
 |---|---|---|
-| **Pelanggan** | Pemilik motor yang membeli suku cadang/aksesori | Menemukan barang, membeli dengan mudah, memantau pesanan |
-| **Admin** | Pengelola toko | Mengelola katalog dan stok, memverifikasi pembayaran, memproses pesanan |
+| **Pelanggan** | Pemilik atau pengendara sepeda motor yang mencari suku cadang dan aksesori (akses berbasis sesi/pratinjau tanpa registrasi wajib) | Menemukan part yang cocok dengan motor, menyimpan wishlist & data motor, berbelanja via keranjang, membayar via VA, dan melacak pengiriman |
+| **Admin** | Pengelola operasional toko SEN Kanan | Mengelola ketersediaan stok & riwayat stok, memverifikasi/menolak mutasi pembayaran VA, memproses pengiriman pesanan & menerbitkan resi |
 
 ## 5. Ruang Lingkup Fitur
 
-### 5.1 Sisi Pelanggan
+### 5.1 Sisi Pelanggan (`senkanan-app` & `user.puml`)
 
-| ID | Fitur | Prioritas |
-|---|---|---|
-| FR-01 | Registrasi akun (nama, alamat pengiriman) | Must |
-| FR-02 | Kelola profil & alamat pengiriman | Must |
-| FR-03 | Kelola motor saya (tambah/hapus motor) | Should |
-| FR-04 | Lihat katalog produk (daftar, cari, filter merek) | Must |
-| FR-05 | Lihat detail produk | Must |
-| FR-06 | Kelola keranjang (tambah, ubah jumlah, hapus) | Must |
-| FR-07 | Checkout pesanan | Must |
-| FR-08 | Bayar pesanan dengan kartu debit | Must |
-| FR-09 | Lihat riwayat & status pesanan | Must |
-| FR-10 | Lihat detail pesanan (alamat, estimasi tiba, status pembayaran) | Must |
+| ID | Fitur | Prioritas | Referensi Diagram |
+|---|---|---|---|
+| FR-01 | Lihat Beranda (hero banner, kategori produk, dan produk unggulan) | Must | `user.puml` |
+| FR-02 | Lihat Katalog, Pencarian (judul, spesifikasi, kategori, kecocokan), Filter Kategori & Urutkan Produk | Must | `user.puml`, `Katalog.puml` |
+| FR-03 | Lihat Detail Produk (spesifikasi, kecocokan motor, status stok) & Tambah ke Keranjang | Must | `user.puml`, `Detail_Produk.puml` |
+| FR-04 | Kelola Produk Favorit / Wishlist (toggle ikon hati) | Should | `user.puml`, `Katalog.puml` |
+| FR-05 | Kelola Keranjang Belanja (ubah jumlah `+`/`−`, hapus item, hitung subtotal otomatis) | Must | `user.puml`, `Keranjang.puml` |
+| FR-06 | Daftarkan & Ubah Data Motor (*Motor Saya*: nama pemilik, merek, tipe/model, plat nomor) | Should | `user.puml`, `Motor.puml` |
+| FR-07 | Kelola Profil & Alamat Pengiriman (label, penerima, no. HP, email, alamat lengkap, catatan) | Must | `user.puml`, `Alamat.puml` |
+| FR-08 | Checkout Pesanan (pilih kurir JNE REG/YES, opsi asuransi, catatan pesanan) | Must | `user.puml`, `checkout-va.puml` |
+| FR-09 | Pembayaran Virtual Account (pilih bank BCA/BNI/Mandiri, generate 16 digit VA, konfirmasi bayar) | Must | `user.puml`, `checkout-va.puml` |
+| FR-10 | Lacak Status Pesanan (timeline 4 tahap, rincian biaya, info kurir, nomor resi, estimasi tiba) | Must | `user.puml`, `lacak-pesanan.puml` |
+| FR-11 | Konsultasi Kecocokan Part via WhatsApp & Baca Informasi Toko (panduan belanja, ongkir, retur) | Could | `user.puml` |
 
-### 5.2 Sisi Admin
+### 5.2 Sisi Admin (`admin` & `admin.puml`)
 
-| ID | Fitur | Prioritas |
-|---|---|---|
-| FR-11 | Kelola merek & model motor | Should |
-| FR-12 | Kelola merek produk & produk | Must |
-| FR-13 | Kelola stok (stok masuk, riwayat mutasi) | Must |
-| FR-14 | Verifikasi pembayaran | Must |
-| FR-15 | Lihat daftar pesanan, proses & ubah status pesanan | Must |
+| ID | Fitur | Prioritas | Referensi Diagram |
+|---|---|---|---|
+| FR-12 | Masuk (Login Admin) & Keluar dari Panel Operasional | Must | `admin.puml`, `Admin_Masuk.puml` |
+| FR-13 | Lihat Ringkasan & Daftar Manajemen Stok (filter kategori, status stok, pencarian SKU/nama) | Must | `admin.puml`, `Admin_Stok.puml` |
+| FR-14 | Tambah Stok Produk & Catat Riwayat Mutasi Stok (`riwayat_stok`) | Must | `admin.puml`, `Admin_Stok.puml` |
+| FR-15 | Ekspor Laporan Stok ke Berkas CSV (`stok-senkanan.csv`) | Should | `admin.puml`, `Admin_Stok.puml` |
+| FR-16 | Lihat Daftar & Detail Pembayaran VA (filter status `MENUNGGU`, `LUNAS`, `DITOLAK`; salin no. VA) | Must | `admin.puml`, `Admin_Pembayaran.puml` |
+| FR-17 | Verifikasi / Konfirmasi atau Tolak Pembayaran VA beserta Catatan Admin | Must | `admin.puml`, `Admin_Pembayaran.puml` |
+| FR-18 | Lihat Daftar & Detail Pesanan (filter tahap pesanan, tanggal, pencarian nomor pesanan/pelanggan) | Must | `admin.puml`, `Admin_Pesanan.puml` |
+| FR-19 | Proses Pesanan (`DIBUAT` → `DIPROSES`) & Kirim Pesanan (`DIPROSES` → `DIKIRIM` + nomor resi) | Must | `admin.puml`, `Admin_Pesanan.puml` |
+| FR-20 | Batalkan Pesanan dengan Dialog Konfirmasi | Should | `admin.puml`, `Admin_batal.puml` |
 
 ## 6. Kebutuhan Fungsional
 
-### 6.1 Akun & Profil (FR-01, FR-02)
-- Pelanggan mengisi nama (`nama_pengguna`) dan alamat pengiriman (`alamat_pengiriman`).
-- Pelanggan dapat mengubah nama dan alamat kapan saja; perubahan hanya berlaku untuk pesanan berikutnya.
+### 6.1 Beranda, Katalog & Detail Produk (FR-01, FR-02, FR-03, FR-04)
+- **Kategori Produk (`kategori_produk`):** Menampilkan kategori utama seperti *Lampu dan sein*, *Pengereman*, *Aksesori motor*, *Mesin dan komponen*, dan *Kelistrikan*.
+- **Pencarian & Filter:** Pelanggan dapat memfilter berdasarkan kategori, mencari kata kunci yang mencocokkan `nama_produk`, `spesifikasi`, `kecocokan`, maupun `kategori`, serta mengurutkan berdasarkan standar, harga terendah, harga tertinggi, atau nama (A–Z).
+- **Status Stok Turunan (`Produk.statusStok()`):**
+  - `stok > 5` → **Tersedia**
+  - `1 <= stok <= 5` → **Terbatas**
+  - `stok == 0` → **Habis** (tombol tambah ke keranjang dinonaktifkan)
+- **Detail Produk:** Ditampilkan dalam modal interaktif berisi foto produk, label unggulan, spesifikasi, informasi kecocokan motor, deskripsi lengkap, harga satuan, serta pengatur jumlah (minimal 1 unit).
+- **Wishlist (`favorit`):** Pelanggan dapat menandai atau menghapus produk dari daftar favorit melalui ikon hati pada kartu produk.
 
-### 6.2 Motor Saya (FR-03)
-- Pelanggan memilih merek, lalu model (daftar model bergantung pada merek terpilih), mengisi tahun dan plat nomor.
-- Data disimpan di `motor_pengguna`. Satu pelanggan boleh memiliki banyak motor.
+### 6.2 Profil Motor & Alamat Pengiriman (FR-06, FR-07)
+- **Motor Saya (`motor_pengguna`):** Pelanggan mengisi `nama_pemilik`, `merek`, `tipe_model`, dan `plat_nomor`. Validasi mewajibkan minimal `merek` dan `tipe_model` terisi sebelum disimpan.
+- **Alamat Pengiriman (`alamat_pengiriman`):** Menyimpan `label` (mis. *Rumah • Utama*), `nama_penerima`, `no_hp`, `email`, `alamat_lengkap`, dan `catatan`. Alamat dapat diubah langsung dari halaman Keranjang maupun Checkout melalui modal dialog.
 
-### 6.3 Katalog & Detail Produk (FR-04, FR-05)
-- Katalog menampilkan nama, harga, stok, dan merek produk.
-- Pencarian berdasarkan nama produk; filter berdasarkan merek (`merek_produk`).
-- Produk dengan `stok = 0` tetap tampil dengan label "Stok habis" dan tombol keranjang nonaktif.
-- Detail produk menampilkan nama, deskripsi, harga, stok, merek, pengatur jumlah, dan tombol "Tambah ke keranjang".
+### 6.3 Keranjang Belanja (FR-05)
+- **Manajemen Item (`keranjang`):** Setiap baris menyimpan relasi pelanggan dan produk dengan batasan `jumlah > 0` dan unik per pasangan `(id_pelanggan, id_produk)`.
+- Menambahkan produk yang sudah ada di keranjang akan mengakumulasi jumlah (`qty + delta`).
+- Pelanggan dapat menambah/mengurangi jumlah (`+`/`−`), menghapus item, dan melihat subtotal barang secara langsung sebelum melanjutkan ke checkout.
 
-### 6.4 Keranjang (FR-06)
-- Setiap baris keranjang berisi produk (`id_produk`, `nama_produk`) dan `jumlah`.
-- Jumlah minimal 1 dan tidak boleh melebihi `produk.stok`.
-- Menambahkan produk yang sudah ada di keranjang menambah jumlahnya, bukan membuat baris baru.
-- Subtotal = harga × jumlah (dihitung saat tampil, tidak disimpan).
-- Baris dengan stok tidak mencukupi ditandai "Stok tidak cukup" dan checkout diblokir sampai diperbaiki.
-- Keranjang kosong menampilkan ajakan "Mulai belanja".
+### 6.4 Checkout & Pembayaran Virtual Account (FR-08, FR-09)
+- **Perhitungan Biaya Pesanan (`pesanan` & `pengiriman`):**
+  - **Kurir Pengiriman:**
+    - `JNE REG`: Ongkos kirim **Rp 18.000** (estimasi 2–3 hari kerja).
+    - `JNE YES`: Ongkos kirim **Rp 28.000** (estimasi 1 hari).
+  - **Asuransi Pengiriman:** Opsional sebesar **Rp 1.800**.
+  - **Biaya Layanan:** Tetap sebesar **Rp 1.000** per pesanan.
+  - **Rumus Total:** `total = subtotal_produk + ongkir + asuransi + biaya_layanan`.
+- **Virtual Account (`pembayaran`):**
+  - Bank yang didukung: **BCA** (kode prefix `80777`), **BNI** (kode prefix `8808`), dan **Mandiri** (kode prefix `88908`).
+  - Sistem menghasilkan nomor Virtual Account sepanjang **16 digit angka** (`CHAR(16)`).
+  - Transfer dilakukan oleh pelanggan di luar sistem, kemudian pelanggan menekan tombol **Konfirmasi Pembayaran** pada modal pembayaran untuk membuat pesanan dengan status pembayaran `MENUNGGU` dan tahap pesanan `DIBUAT`.
+- **Transaksi Checkout:** Saat pesanan dibuat (`POST /api/orders`), sistem menyimpan data ke `pesanan`, menyalin harga saat transaksi ke `detail_pesanan`, mengurangi stok produk terkait, dan mengosongkan keranjang belanja pelanggan.
 
-### 6.5 Checkout (FR-07)
-- Pelanggan meninjau item, total, dan alamat pengiriman sebelum membuat pesanan.
-- Saat pesanan dibuat, sistem:
-  1. Membuat `pesanan` dengan status `MENUNGGU_BAYAR` dan `total`.
-  2. Membuat `detail_pesanan` untuk tiap item (menyalin `harga_satuan` saat itu, `total_harga`, dan `alamat_pemesan`).
-  3. Mengurangi `produk.stok` dan mencatat `mutasi_stok` dengan jenis `KELUAR`.
-  4. Mengosongkan keranjang pengguna.
-- Seluruh langkah dijalankan dalam satu transaksi database; jika ada yang gagal (misalnya stok berubah), semuanya dibatalkan dan pelanggan diberi pesan.
+### 6.5 Pelacakan Pesanan Pelanggan (FR-10, FR-11)
+- Menampilkan nomor pesanan unik (format `SK-YYMMDD-NNNN`), tanggal pemesanan, timeline 4 tahap (`DIBUAT` → `DIPROSES` → `DIKIRIM` → `SELESAI`), kurir terpilih, estimasi tiba, alamat pengiriman, daftar barang, serta rincian Virtual Account.
+- Nomor resi pengiriman ditampilkan secara otomatis setelah pesanan memasuki tahap `DIKIRIM`.
+- Menyediakan tautan konsultasi kecocokan suku cadang langsung ke WhatsApp toko serta halaman informasi panduan belanja, pengiriman, dan kebijakan retur.
 
-### 6.6 Pembayaran Kartu Debit (FR-08, FR-14)
-- Metode pembayaran hanya **kartu debit** (`metode = KARTU_DEBIT`).
-- Pembayaran hanya dapat dibuat untuk pesanan berstatus `MENUNGGU_BAYAR`.
-- Sistem membuat `pembayaran` dengan `jumlah = pesanan.total` dan status `MENUNGGU`.
-- Admin memverifikasi pembayaran:
-  - **Valid** → status pembayaran `LUNAS`, `waktu_bayar` terisi, status pesanan menjadi `DIPROSES`.
-  - **Tidak valid** → status pembayaran `DITOLAK`; pelanggan dapat mencoba membayar lagi.
-- **Data kartu (nomor, masa berlaku, CVV) tidak boleh disimpan** di database sistem. Form kartu hanya diteruskan ke penyedia pembayaran.
-
-### 6.7 Pesanan (FR-09, FR-10, FR-15)
-- Pelanggan melihat daftar pesanan miliknya dengan status dan total, serta detail tiap pesanan.
-- Admin melihat seluruh pesanan, dapat memfilter berdasarkan status, dan mengubah status.
-- Alur status: `MENUNGGU_BAYAR` → `DIPROSES` → `DIKIRIM` → `SELESAI`.
-- Saat status menjadi `DIKIRIM`, admin mengisi `estimasi_sampai` pada detail pesanan.
-- Perubahan status di luar alur di atas ditolak.
-
-### 6.8 Pengelolaan Produk & Stok (FR-11, FR-12, FR-13)
-- Admin menambah, mengubah, dan menghapus merek motor, model motor, merek produk, dan produk.
-- Penambahan stok oleh admin memperbarui `produk.stok` dan mencatat `mutasi_stok` jenis `MASUK`.
-- Riwayat mutasi menampilkan produk, jenis, jumlah, dan keterangan.
-- Produk yang sudah pernah dipesan tidak boleh dihapus permanen (lihat Pertanyaan Terbuka #3).
+### 6.6 Operasional Panel Admin (FR-12 s.d. FR-20)
+- **Autentikasi Admin (`admin`):** Admin masuk menggunakan form email dan kata sandi pada `LoginPage` untuk mengakses dashboard operasional (`StockPage`, `OrdersPage`, `PaymentsPage`) dan dapat keluar melalui menu profil.
+- **Manajemen Stok (`StockPage`):**
+  - Menampilkan kartu ringkasan total produk, total unit stok, serta distribusi status (*Tersedia*, *Terbatas*, *Habis*).
+  - Admin dapat menambah stok (`jumlah > 0`) beserta catatan keterangan; sistem memperbarui `produk.stok` dan mencatat log ke `riwayat_stok`.
+  - Fitur **Ekspor Stok** mengunduh berkas `stok-senkanan.csv` berisi SKU, Nama Produk, Kategori, dan Jumlah Stok.
+- **Konfirmasi Pembayaran (`PaymentsPage`):**
+  - Admin meninjau pesanan berstatus pembayaran `MENUNGGU`, menyalin nomor VA, dan melakukan verifikasi mutasi dengan mencentang konfirmasi **"Nominal sesuai"** dan **"Mutasi ditemukan"** serta mengisi catatan admin.
+  - **Konfirmasi Pembayaran:** Mengubah status pembayaran menjadi `LUNAS` dan mencatat `waktu_konfirmasi`.
+  - **Tolak Pembayaran:** Mengubah status pembayaran menjadi `DITOLAK` beserta alasan pada `catatan_admin`.
+- **Manajemen Pesanan (`OrdersPage`):**
+  - **Proses Pesanan:** Mengubah tahap dari `DIBUAT` ke `DIPROSES` (hanya aktif apabila status pembayaran sudah `LUNAS`).
+  - **Kirim Pesanan:** Mengubah tahap dari `DIPROSES` ke `DIKIRIM` sekaligus menghasilkan/menyimpan `no_resi`.
+  - **Batalkan Pesanan:** Menghapus pesanan bermasalah/batal setelah konfirmasi melalui modal dialog.
 
 ## 7. Aturan Bisnis
 
-| ID | Aturan |
-|---|---|
-| BR-01 | `produk.stok` tidak boleh negatif. |
-| BR-02 | `harga_satuan` pada `detail_pesanan` adalah salinan harga saat checkout dan tidak berubah jika harga produk diubah. |
-| BR-03 | `pembayaran.jumlah` harus sama dengan `pesanan.total`. |
-| BR-04 | Pembayaran `LUNAS` mengubah pesanan menjadi `DIPROSES`. |
-| BR-05 | Setiap perubahan stok (checkout, stok masuk) harus tercatat di `mutasi_stok`. |
-| BR-06 | Pelanggan hanya dapat melihat pesanan dan keranjang miliknya sendiri. |
-| BR-07 | Hanya admin yang dapat mengakses halaman pengelolaan dan mengubah status pesanan. |
-| BR-08 | Data kartu debit tidak disimpan oleh sistem. |
-
-## 8. Model Data (ringkasan)
-
-Berdasarkan ERD v3. Tabel `pembayaran` adalah satu-satunya tambahan dari ERD awal.
-
-| Tabel | Kolom utama | Relasi |
+| ID | Aturan Bisnis | Implementasi Sistem |
 |---|---|---|
-| `pengguna` | id_pengguna, nama_pengguna, alamat_pengiriman, id_keranjang | 1:N ke motor_pengguna, keranjang, pesanan |
-| `merek_motor` | id_merek, nama_merek | 1:N ke model_motor |
-| `model_motor` | id_model, id_merek, nama_model, tahun_mulai, tahun_akhir | 1:N ke motor_pengguna |
-| `motor_pengguna` | id, id_pengguna, id_model, tahun, plat_nomor | – |
-| `merek_produk` | id_brand, nama_brand | 1:N ke produk |
-| `produk` | id_produk, id_brand, nama_produk, deskripsi, harga, stok | 1:N ke keranjang, detail_pesanan, mutasi_stok |
-| `keranjang` | id_keranjang, id_pengguna, id_produk, nama_produk, jumlah | – |
-| `pesanan` | id_pesanan, id_pengguna, status, total | 1:N ke detail_pesanan, pembayaran |
-| `detail_pesanan` | id_pesanan, id_produk, jumlah, harga_satuan, total_harga, alamat_pemesan, estimasi_sampai | – |
-| `pembayaran` **(baru)** | id_pembayaran, id_pesanan, metode, jumlah, status, waktu_bayar | – |
-| `mutasi_stok` | id_mutasi, id_produk, jenis, jumlah, keterangan | – |
+| BR-01 | Stok produk tidak boleh bernilai negatif | Constraint SQL `CHECK (stok >= 0)` pada tabel `produk` |
+| BR-02 | Harga barang pada pesanan bersifat historis (tidak berubah jika harga katalog diperbarui) | Disimpan pada kolom `detail_pesanan.harga_satuan` saat checkout |
+| BR-03 | Nomor Virtual Account harus terdiri dari tepat 16 digit angka dari bank terdaftar | Constraint `CHECK (bank IN ('BCA','BNI','MANDIRI'))` dan `REGEXP '^[0-9]{16}$'` |
+| BR-04 | Pesanan hanya dapat diproses (`DIPROSES`) setelah pembayaran diverifikasi `LUNAS` oleh admin | Validasi UI pada `OrdersPage` dan alur `Admin_Pesanan.puml` |
+| BR-05 | Penambahan stok oleh admin wajib bernilai positif dan tercatat dalam riwayat mutasi | Validasi `jumlah > 0` pada `PATCH /api/products/:id/stock` dan tabel `riwayat_stok` |
+| BR-06 | Setiap pasangan pelanggan dan produk dalam keranjang maupun favorit tidak boleh duplikat | Constraint `UNIQUE (id_pelanggan, id_produk)` pada `keranjang` dan Composite PK pada `favorit` |
+| BR-07 | Satu pesanan memiliki tepat satu data pengiriman dan satu data pembayaran | Relasi 1:1 dengan constraint `UNIQUE (id_pesanan)` pada `pengiriman` dan `pembayaran` |
 
-**Nilai enumerasi**
+## 8. Model Data & Arsitektur Database
 
-| Field | Nilai |
+Berdasarkan ERD (`docs/erd/erd_senkanan.puml`), Class Diagram (`docs/class/class_diagram_senkanan.puml`), dan skema DDL MySQL (`backend/sql/senkanan.sql`), sistem terdiri dari **13 tabel utama** dan **4 database view**:
+
+### 8.1 Daftar Tabel Utama
+
+| No. | Nama Tabel | Kolom Kunci & Utama | Relasi |
+|---|---|---|---|
+| 1 | `admin` | `id_admin` (PK), `nama_admin`, `email` (UQ), `kata_sandi` | 1:N ke `riwayat_stok`, 0..1:N ke `pembayaran` |
+| 2 | `pelanggan` | `id_pelanggan` (PK), `nama`, `email` (UQ), `no_hp` | 1:N ke `motor_pengguna`, `alamat_pengiriman`, `keranjang`, `favorit`, `pesanan` |
+| 3 | `motor_pengguna` | `id_motor` (PK), `id_pelanggan` (FK), `nama_pemilik`, `merek`, `tipe_model`, `plat_nomor` | N:1 ke `pelanggan` |
+| 4 | `alamat_pengiriman` | `id_alamat` (PK), `id_pelanggan` (FK), `label`, `nama_penerima`, `no_hp`, `email`, `alamat_lengkap`, `catatan` | N:1 ke `pelanggan` |
+| 5 | `kategori_produk` | `id_kategori` (PK), `nama_kategori`, `deskripsi`, `ikon` | 1:N ke `produk` |
+| 6 | `produk` | `id_produk` (PK), `id_kategori` (FK), `sku` (UQ), `nama_produk`, `spesifikasi`, `label`, `kecocokan`, `deskripsi`, `harga`, `stok`, `gambar` | 1:N ke `keranjang`, `favorit`, `detail_pesanan`, `riwayat_stok` |
+| 7 | `riwayat_stok` | `id_riwayat` (PK), `id_produk` (FK), `id_admin` (FK), `jumlah`, `catatan`, `waktu` | N:1 ke `produk` & `admin` |
+| 8 | `keranjang` | `id_keranjang` (PK), `id_pelanggan` (FK), `id_produk` (FK), `jumlah` | N:1 ke `pelanggan` & `produk` |
+| 9 | `favorit` | `id_pelanggan` (PK, FK), `id_produk` (PK, FK) | N:M penghubung `pelanggan` & `produk` |
+| 10 | `pesanan` | `id_pesanan` (PK), `nomor_pesanan` (UQ), `id_pelanggan` (FK), `tanggal_pesanan`, `tahap`, `biaya_layanan`, `total`, `catatan`, `waktu_diproses`, `waktu_dikirim`, `waktu_tiba` | 1:N ke `detail_pesanan`; 1:1 ke `pengiriman` & `pembayaran` |
+| 11 | `detail_pesanan` | `id_pesanan` (PK, FK), `id_produk` (PK, FK), `jumlah`, `harga_satuan` | N:1 ke `pesanan` & `produk` |
+| 12 | `pengiriman` | `id_pengiriman` (PK), `id_pesanan` (FK, UQ), `nama_penerima`, `no_hp_penerima`, `email_penerima`, `alamat_lengkap`, `catatan_alamat`, `kurir`, `ongkir`, `asuransi`, `no_resi`, `estimasi_awal`, `estimasi_akhir` | 1:1 ke `pesanan` |
+| 13 | `pembayaran` | `id_pembayaran` (PK), `id_pesanan` (FK, UQ), `id_admin` (FK, NULL), `bank`, `no_va`, `jumlah`, `status`, `waktu_bayar`, `waktu_konfirmasi`, `catatan_admin` | 1:1 ke `pesanan`; N:0..1 ke `admin` |
+
+### 8.2 Database Views (Nilai Turunan Class Diagram)
+
+| Nama View | Fungsi / Method Terkait | Keterangan |
+|---|---|---|
+| `v_produk_status_stok` | `Produk.statusStok()` | Menghasilkan status `'Habis'` (`stok = 0`), `'Terbatas'` (`stok <= 5`), atau `'Tersedia'` (`stok > 5`) |
+| `v_keranjang_subtotal` | `Keranjang.hitungSubtotal()` | Menghitung `jumlah * harga` per baris keranjang |
+| `v_detail_pesanan_total` | `DetailPesanan.hitungTotalHarga()` | Menghitung `jumlah * harga_satuan` per item pesanan |
+| `v_pesanan_total` | `Pesanan.hitungSubtotal()` & `hitungTotal()` | Mengagregasi subtotal item ditambah `ongkir`, `asuransi`, dan `biaya_layanan` |
+
+### 8.3 Nilai Enumerasi
+
+| Kolom | Nilai yang Diizinkan |
 |---|---|
-| `pesanan.status` | MENUNGGU_BAYAR, DIPROSES, DIKIRIM, SELESAI |
-| `pembayaran.metode` | KARTU_DEBIT |
-| `pembayaran.status` | MENUNGGU, LUNAS, DITOLAK |
-| `mutasi_stok.jenis` | MASUK, KELUAR |
+| `pesanan.tahap` | `'DIBUAT'`, `'DIPROSES'`, `'DIKIRIM'`, `'SELESAI'` |
+| `pengiriman.kurir` | `'JNE REG'`, `'JNE YES'` |
+| `pembayaran.bank` | `'BCA'`, `'BNI'`, `'MANDIRI'` |
+| `pembayaran.status` | `'MENUNGGU'`, `'LUNAS'`, `'DITOLAK'` |
 
-## 9. Alur Utama Pengguna
+## 9. Spesifikasi Antarmuka API (Backend REST API)
 
-**Pembelian (pelanggan)**
-Katalog → Detail produk → Tambah ke keranjang → Keranjang → Checkout → Pembayaran kartu debit → Konfirmasi (menunggu verifikasi) → Riwayat/Detail pesanan.
+| Method | Endpoint | Deskripsi |
+|---|---|---|
+| `GET` | `/api/health` | Pengecekan status layanan API dan koneksi database |
+| `GET` | `/api/products` | Mengambil daftar produk (query: `category`, `search`, `sort`) |
+| `GET` | `/api/products/categories` | Mengambil daftar kategori produk |
+| `GET` | `/api/products/:id` | Mengambil detail produk berdasarkan ID |
+| `PATCH` | `/api/products/:id/stock` | Menambah stok produk dari Panel Admin |
+| `GET` | `/api/cart` | Mengambil daftar item keranjang berdasarkan sesi |
+| `POST` | `/api/cart` | Menambahkan produk ke keranjang (atau menambah qty jika sudah ada) |
+| `PATCH` | `/api/cart/:productId` | Mengubah jumlah (`qty`) item di keranjang |
+| `DELETE` | `/api/cart/:productId` | Menghapus item dari keranjang |
+| `GET` | `/api/wishlist` | Mengambil daftar ID produk favorit pelanggan |
+| `POST` | `/api/wishlist/toggle` | Menambah/menghapus produk dari daftar favorit |
+| `GET` & `PUT` | `/api/profile/motor` | Mengambil & menyimpan profil *Motor Saya* |
+| `GET` & `PUT` | `/api/profile/address` | Mengambil & memperbarui alamat pengiriman pelanggan |
+| `GET` | `/api/orders` | Mengambil riwayat pesanan pelanggan berdasarkan sesi |
+| `GET` | `/api/orders/all` | Mengambil seluruh pesanan untuk kebutuhan Panel Admin |
+| `GET` | `/api/orders/latest` | Mengambil pesanan terakhir yang dibuat pelanggan |
+| `POST` | `/api/orders` | Membuat pesanan baru (checkout VA), mengurangi stok, dan mengosongkan keranjang |
+| `PATCH` | `/api/orders/:id/stage` | Memperbarui tahap pesanan (`DIPROSES`, `DIKIRIM`, `SELESAI`) & nomor resi |
+| `PATCH` | `/api/orders/:id/payment` | Mengonfirmasi (`LUNAS`) atau menolak (`DITOLAK`) pembayaran VA oleh Admin |
+| `DELETE` | `/api/orders/:id` | Membatalkan dan menghapus pesanan oleh Admin |
 
-**Pemrosesan (admin)**
-Verifikasi pembayaran (valid) → pesanan `DIPROSES` → ubah status `DIKIRIM` (isi estimasi tiba) → `SELESAI`.
+## 10. Daftar Layar & Komponen Antarmuka (Desain Figma)
 
-**Stok (admin)**
-Kelola stok → input stok masuk → `produk.stok` bertambah dan `mutasi_stok` (MASUK) tercatat.
+Selaras dengan [Desain Figma SEN Kanan](https://www.figma.com/design/MY9sEsMFEnJyxbBtzfWnRF/Kelompok-SEN-Kanan?node-id=0-1&t=u6LFxmPz3hAPL0eb-1) serta implementasi frontend:
 
-## 10. Daftar Layar (frame Figma)
+### 10.1 Aplikasi Pelanggan (`senkanan-app`)
+1. **Beranda:** Hero banner promosi, akses cepat kategori unggulan, dan etalase produk pilihan.
+2. **Katalog Produk:** Kolom pencarian langsung, filter kategori, pengurutan produk, badge status stok, dan tombol wishlist.
+3. **Modal Detail Produk:** Informasi kecocokan motor, spesifikasi teknis, pengatur kuantitas, dan tombol tambah ke keranjang.
+4. **Keranjang Belanja:** Daftar item terpilih, kontrol kuantitas (`+`/`−`), hapus item, ringkasan belanja, dan tampilan *empty state* saat keranjang kosong.
+5. **Checkout & Modal Konfirmasi VA:** Ringkasan alamat pengiriman (dengan modal *Ubah Alamat*), pemilihan kurir JNE REG/YES, opsi asuransi, pemilihan bank VA (BCA/BNI/Mandiri) dengan nomor VA 16 digit, serta modal konfirmasi pembayaran.
+6. **Pelacakan Pesanan (`PesananView`):** Visualisasi progres 4 tahap pesanan, informasi kurir, nomor resi, estimasi tiba, dan rincian pembayaran.
+7. **Profil Motor Saya (`MotorSayaView`):** Formulir pendaftaran dan pratinjau kartu identitas motor pelanggan.
+8. **Informasi Toko & Bantuan:** Panduan pemesanan, informasi ongkos kirim, kebijakan retur, serta tombol konsultasi WhatsApp.
 
-Berdasarkan pembaruan struktur file desain Figma terbaru (`Desain Figma/user/` dan `Desain Figma/admin/`):
-
-1. Beranda (Pelanggan)
-2. Registrasi akun & Masuk / Berhasil Masuk
-3. Katalog produk
-4. Detail Produk
-5. Keranjang
-6. Checkout
-7. Pembayaran kartu debit
-8. Konfirmasi pembayaran
-9. Riwayat pesanan
-10. Detail pesanan
-11. Profil & alamat (Motor saya / Pengguna)
-12. Dashboard Admin & Manajemen Stok Admin
-13. Admin Pesanan Pelanggan
-
-**Kebutuhan tampilan umum:** komponen yang dipakai ulang (navbar, kartu produk, tombol, input, tabel, badge status, modal, toast); keadaan kosong (keranjang, riwayat); keadaan stok habis; keadaan pembayaran (diproses, ditolak, berhasil); pesan error form.
-
-**Layar Keranjang (detail):** tiap baris barang berisi gambar (placeholder), nama produk, merek, harga satuan, pengatur jumlah (− / +, maksimal sesuai stok), subtotal, dan tombol hapus; varian normal, stok menipis, stok tidak cukup, dan loading.
+### 10.2 Panel Operasional Admin (`admin`)
+1. **Halaman Masuk (`LoginPage`) & Selamat Datang (`WelcomePage`):** Gerbang masuk operasional admin.
+2. **Manajemen Stok (`StockPage`):** Ringkasan metrik stok, tabel produk dengan filter kategori/status, formulir penambahan stok dengan catatan, serta tombol ekspor CSV.
+3. **Manajemen Pesanan (`OrdersPage`):** Filter berdasarkan tahap (`DIBUAT`, `DIPROSES`, `DIKIRIM`, `SELESAI`), panel detail pesanan, aksi *Proses Pesanan*, *Kirim Pesanan* (generate resi), dan modal konfirmasi *Batalkan Pesanan*.
+4. **Konfirmasi Pembayaran (`PaymentsPage`):** Tab status (`Menunggu`, `Lunas`, `Ditolak`), pemeriksaan nomor VA, checklist verifikasi mutasi bank, catatan admin, dan aksi *Konfirmasi* atau *Tolak Pembayaran*.
 
 ## 11. Kebutuhan Non-Fungsional
 
 | Area | Kebutuhan |
 |---|---|
-| **Keamanan** | Data kartu tidak disimpan; komunikasi lewat HTTPS; akses admin dipisahkan dari pelanggan; pelanggan hanya mengakses datanya sendiri. |
-| **Integritas data** | Checkout dan perubahan stok dalam satu transaksi; constraint `stok >= 0`. |
-| **Performa** | Halaman katalog dan keranjang termuat ≤ 3 detik pada koneksi umum. |
-| **Kegunaan** | Responsif untuk layar desktop dan mobile; alur dari keranjang ke pembayaran maksimal 3 langkah. |
-| **Ketersediaan** | Target uptime 99% selama jam operasional toko. |
-| **Kompatibilitas** | Browser modern terbaru (Chrome, Edge, Firefox, Safari). |
-
-## 12. Metrik Keberhasilan (usulan)
-
-| Metrik | Target awal |
-|---|---|
-| Tingkat penyelesaian checkout (keranjang → pesanan) | ≥ 60% |
-| Pesanan yang pembayarannya terverifikasi ≤ 1 hari kerja | ≥ 90% |
-| Selisih stok sistem vs stok fisik saat opname | ≤ 2% |
-| Pesanan dengan status yang diperbarui tepat waktu | ≥ 95% |
-
-Target dapat disesuaikan setelah ada data operasional.
-
-## 13. Asumsi
-
-- Verifikasi pembayaran dilakukan manual oleh admin pada versi 1.0.
-- Ongkos kirim tidak dihitung otomatis (belum ada kolom di ERD).
-- Pembayaran kartu debit diproses lewat penyedia pembayaran pihak ketiga; sistem hanya mencatat hasilnya.
-- Gambar produk belum disimpan di database; tampilan memakai placeholder sampai kolom gambar ditambahkan.
-
-## 14. Risiko & Mitigasi
-
-| Risiko | Dampak | Mitigasi |
-|---|---|---|
-| Dua pelanggan membeli stok terakhir bersamaan | Stok negatif | Transaksi database dan pengecekan ulang stok saat checkout |
-| Pesanan menggantung di `MENUNGGU_BAYAR` dan menahan stok | Stok tidak tersedia untuk pembeli lain | Tentukan batas waktu bayar atau fitur pembatalan di versi berikutnya |
-| Pembayaran sudah dipotong tetapi status belum diperbarui | Keluhan pelanggan | Catat referensi transaksi dan sediakan halaman verifikasi admin |
-| Data kartu bocor jika disimpan sendiri | Risiko hukum dan reputasi | Jangan simpan data kartu; gunakan penyedia pembayaran tersertifikasi |
-
-## 15. Pertanyaan Terbuka
-
-1. **Autentikasi:** tabel `pengguna` belum memiliki email/password dan peran (admin/pelanggan). Bagaimana pengguna masuk ke sistem dan bagaimana admin dibedakan?
-2. **Relasi `pengguna` ↔ `keranjang`:** ERD saat ini memuat `id_keranjang` di `pengguna` sekaligus `id_pengguna` di `keranjang` (saling menunjuk). Disarankan hanya `keranjang.id_pengguna`.
-3. **Penghapusan produk:** produk yang sudah dipesan tidak boleh dihapus permanen; perlu kolom status aktif/nonaktif atau aturan penghapusan.
-4. **Verifikasi pembayaran:** manual oleh admin, atau otomatis lewat penyedia pembayaran? Menentukan perlu tidaknya layar Verifikasi pembayaran (#17).
-5. **Batas waktu pembayaran:** berapa lama pesanan `MENUNGGU_BAYAR` ditahan sebelum dibatalkan dan stok dikembalikan?
-6. **Ongkos kirim dan kurir:** apakah dibutuhkan pada versi 1.0?
-7. **Gambar produk dan kategori:** apakah perlu ditambahkan ke ERD sebelum desain final?
-
-## 16. Rencana Rilis (usulan)
-
-| Tahap | Cakupan |
-|---|---|
-| **Desain** | Wireframe dan prototype Figma untuk seluruh layar, komponen dan design system |
-| **MVP** | FR-01, 02, 04–10, 12–15 (alur beli sampai pesanan diproses, pengelolaan produk & stok) |
-| **Rilis 1.0** | MVP + FR-03, FR-11, penyempurnaan error/empty state |
-| **Berikutnya** | Rekomendasi produk sesuai motor, kategori produk, pembatalan/retur, ongkir, laporan penjualan |
+| **Integritas Data** | Proses checkout menggunakan transaksi database (`beginTransaction` / `commit` / `rollback`) sehingga pembuatan pesanan dan pengurangan stok berjalan atomik. |
+| **Keamanan & Privasi** | Kredensial database dan konfigurasi port disimpan di berkas `.env` yang dikecualikan dari repositori Git; kata sandi admin dirancang untuk disimpan dalam bentuk hash. |
+| **Kegunaan (Usability)** | Antarmuka responsif berbasis Tailwind CSS dengan umpan balik instan berupa notifikasi *toast*, validasi form, dan keadaan kosong (*empty state*) yang informatif. |
+| **Interoperabilitas** | Arsitektur terpisah antara frontend pelanggan, panel admin, dan backend REST API memungkinkan pengembangan maupun deployment independen. |
+| **Kompatibilitas** | Mendukung browser modern (Chrome, Edge, Firefox, Safari) serta MySQL 8.0+ / MariaDB 10.2+. |
