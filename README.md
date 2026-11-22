@@ -37,4 +37,4 @@ Perkembangan dunia otomotif yang semakin pesat menuntut adanya sistem penjualan 
 
 ERD projek dapat dilihat pada gambar berikut:
 
-[ERD SEN Kanan](https://drive.google.com/file/d/1qQRbwaU-KbShyqFCl1a1Dr0kH-eAO_Xu/view?usp=sharing)
+[ERD SEN Kanan](https://drive.google.com/file/d/1GWsWVuGhsHkBxkOXB5GebjDPhLi12A6l/view?usp=sharing)
