@@ -1,0 +1,19 @@
+@startuml
+title Sequence Diagram – Admin Masuk & Keluar (kredensial belum diverifikasi)
+actor Admin
+participant LoginPage
+participant "App (state)" as App
+
+Admin -> LoginPage: Isi email & kata sandi, klik "Masuk"
+alt email & kata sandi terisi
+    LoginPage -> App: onLogin() → navigate("stock")
+    App --> Admin: Tampilkan Manajemen Stok
+else ada yang kosong
+    LoginPage --> Admin: Pesan: "Isi email dan kata sandi terlebih dahulu"
+end
+
+opt menu avatar → "Keluar"
+    Admin -> App: Klik "Keluar"
+    App --> Admin: Kembali ke halaman Masuk
+end
+@enduml
