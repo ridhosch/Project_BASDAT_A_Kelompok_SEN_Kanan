@@ -1,22 +1,31 @@
 @startuml
 title ERD – SEN Kanan (model data sesuai program senkanan-app & senkanan-admin)
+
 hide circle
 skinparam linetype ortho
 
-entity motor_pengguna #E6DDF5 {
-  * id_motor : INT <<PK>>
+entity "pelanggan" as pelanggan {
+  * **id_pelanggan** : INT <<PK>>
   --
-  # id_pelanggan : INT <<FK>>
+  nama : VARCHAR
+  email : VARCHAR <<UQ>>
+  no_hp : VARCHAR
+}
+
+entity "motor_pengguna" as motor_pengguna {
+  * **id_motor** : INT <<PK>>
+  --
+  * id_pelanggan : INT <<FK>>
   nama_pemilik : VARCHAR
   merek : VARCHAR
   tipe_model : VARCHAR
-  plat_nomor : VARCHAR
+  plat_nomor : VARCHAR <<UQ>>
 }
 
-entity alamat_pengiriman #D6EAFB {
-  * id_alamat : INT <<PK>>
+entity "alamat_pengiriman" as alamat_pengiriman {
+  * **id_alamat** : INT <<PK>>
   --
-  # id_pelanggan : INT <<FK>>
+  * id_pelanggan : INT <<FK>>
   label : VARCHAR
   nama_penerima : VARCHAR
   no_hp : VARCHAR
@@ -25,35 +34,35 @@ entity alamat_pengiriman #D6EAFB {
   catatan : VARCHAR
 }
 
-entity pelanggan #D6EAFB {
-  * id_pelanggan : INT <<PK>>
+entity "keranjang" as keranjang {
+  * **id_keranjang** : INT <<PK>>
   --
-  nama : VARCHAR
-  email : VARCHAR <<UQ>>
-  no_hp : VARCHAR
-}
-
-entity keranjang #D6EAFB {
-  * id_keranjang : INT <<PK>>
-  --
-  # id_pelanggan : INT <<FK>>
-  # id_produk : INT <<FK>>
+  * id_pelanggan : INT <<FK>>
+  * id_produk : INT <<FK>>
   jumlah : INT
 }
 
-entity favorit #D6EAFB {
-  * id_pelanggan : INT <<PK,FK>>
-  * id_produk : INT <<PK,FK>>
+entity "favorit" as favorit {
+  * **id_pelanggan** : INT <<PK, FK>>
+  * **id_produk** : INT <<PK, FK>>
 }
 
-entity produk #FDE3C8 {
-  * id_produk : INT <<PK>>
+entity "kategori_produk" as kategori_produk {
+  * **id_kategori** : INT <<PK>>
   --
-  # id_kategori : INT <<FK>>
+  nama_kategori : VARCHAR
+  deskripsi : VARCHAR
+  ikon : VARCHAR
+}
+
+entity "produk" as produk {
+  * **id_produk** : INT <<PK>>
+  --
+  * id_kategori : INT <<FK>>
   sku : VARCHAR <<UQ>>
   nama_produk : VARCHAR
   spesifikasi : VARCHAR
-  label : VARCHAR, null
+  label : VARCHAR <<NULL>>
   kecocokan : TEXT
   deskripsi : TEXT
   harga : DECIMAL
@@ -61,37 +70,29 @@ entity produk #FDE3C8 {
   gambar : VARCHAR
 }
 
-entity kategori_produk #FDE3C8 {
-  * id_kategori : INT <<PK>>
+entity "riwayat_stok" as riwayat_stok {
+  * **id_riwayat** : INT <<PK>>
   --
-  nama_kategori : VARCHAR
-  deskripsi : VARCHAR
-  ikon : VARCHAR
-}
-
-entity riwayat_stok #FDE3C8 {
-  * id_riwayat : INT <<PK>>
-  --
-  # id_produk : INT <<FK>>
-  # id_admin : INT <<FK>>
+  * id_produk : INT <<FK>>
+  * id_admin : INT <<FK>>
   jumlah : INT
   catatan : VARCHAR
   waktu : DATETIME
 }
 
-entity admin #CDEDE6 {
-  * id_admin : INT <<PK>>
+entity "admin" as admin {
+  * **id_admin** : INT <<PK>>
   --
   nama_admin : VARCHAR
   email : VARCHAR <<UQ>>
   kata_sandi : VARCHAR (hash)
 }
 
-entity pesanan #DCEFDC {
-  * id_pesanan : INT <<PK>>
+entity "pesanan" as pesanan {
+  * **id_pesanan** : INT <<PK>>
   --
   nomor_pesanan : VARCHAR <<UQ>>
-  # id_pelanggan : INT <<FK>>
+  * id_pelanggan : INT <<FK>>
   tanggal_pesanan : DATETIME
   tahap : VARCHAR
   biaya_layanan : DECIMAL
@@ -102,18 +103,18 @@ entity pesanan #DCEFDC {
   waktu_tiba : DATETIME
 }
 
-entity detail_pesanan #DCEFDC {
-  * id_pesanan : INT <<PK,FK>>
-  * id_produk : INT <<PK,FK>>
+entity "detail_pesanan" as detail_pesanan {
+  * **id_pesanan** : INT <<PK, FK>>
+  * **id_produk** : INT <<PK, FK>>
   --
   jumlah : INT
   harga_satuan : DECIMAL
 }
 
-entity pengiriman #DCEFDC {
-  * id_pengiriman : INT <<PK>>
+entity "pengiriman" as pengiriman {
+  * **id_pengiriman** : INT <<PK>>
   --
-  # id_pesanan : INT <<FK>>
+  * id_pesanan : INT <<FK>>
   nama_penerima : VARCHAR
   no_hp_penerima : VARCHAR
   email_penerima : VARCHAR
@@ -122,16 +123,16 @@ entity pengiriman #DCEFDC {
   kurir : VARCHAR
   ongkir : DECIMAL
   asuransi : DECIMAL
-  no_resi : VARCHAR, null
+  no_resi : VARCHAR <<NULL>>
   estimasi_awal : DATE
   estimasi_akhir : DATE
 }
 
-entity pembayaran #DCEFDC {
-  * id_pembayaran : INT <<PK>>
+entity "pembayaran" as pembayaran {
+  * **id_pembayaran** : INT <<PK>>
   --
-  # id_pesanan : INT <<FK>>
-  # id_admin : INT, null <<FK>>
+  * id_pesanan : INT <<FK>>
+  id_admin : INT <<FK, NULL>>
   bank : VARCHAR
   no_va : CHAR(16)
   jumlah : DECIMAL
@@ -141,22 +142,42 @@ entity pembayaran #DCEFDC {
   catatan_admin : VARCHAR
 }
 
+' Relasi
 pelanggan ||--o{ motor_pengguna
 pelanggan ||--o{ alamat_pengiriman
 pelanggan ||--o{ keranjang
 pelanggan ||--o{ favorit
 pelanggan ||--o{ pesanan
 
+kategori_produk ||--o{ produk
 produk ||--o{ keranjang
 produk ||--o{ favorit
 produk ||--o{ detail_pesanan
 produk ||--o{ riwayat_stok
-kategori_produk ||--o{ produk
 
 pesanan ||--o{ detail_pesanan
 pesanan ||--|| pengiriman
-pesanan ||--|| pembayaran
+pesanan ||--o{ pembayaran
 
 admin ||--o{ riwayat_stok
 admin |o--o{ pembayaran
+
+note as N1
+  <b>Catatan & Nilai Enumerasi</b>
+  * Program saat ini tanpa database: semua data berupa state/contoh di memori.
+    ERD ini adalah model data yang dibutuhkan fitur-fitur di program.
+  * <b>pesanan.tahap</b>: DIBUAT -> DIPROSES -> DIKIRIM -> SELESAI (tiba di tujuan)
+  * <b>pembayaran.status</b>: MENUNGGU, LUNAS (Terkonfirmasi), DITOLAK
+  * <b>pembayaran.bank</b>: BCA (prefiks 80777), BNI (8808), MANDIRI (88908); no_va 16 digit
+  * <b>pengiriman.kurir</b>: JNE REG (Rp18.000, 2-3 hari kerja), JNE YES (Rp28.000, 1 hari)
+  * asuransi opsional Rp1.000; biaya_layanan Rp1.000
+  * total = subtotal item + ongkir + asuransi + biaya_layanan
+  * Status stok (turunan dari produk.stok): Tersedia > 5, Terbatas 1-5, Habis 0
+  * nomor_pesanan berformat SK-YYMMDD-NNNN
+  * keranjang unik per (id_pelanggan, id_produk)
+  * Pelanggan belum punya login di program; diidentifikasi lewat email.
+  ---
+  <i>Notasi: PK = primary key, FK = foreign key, UQ = unique; kaki gagak = banyak, garis = satu.</i>
+end note
+
 @enduml
