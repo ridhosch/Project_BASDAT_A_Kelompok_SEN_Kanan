@@ -1,0 +1,30 @@
+@startuml
+title Sequence Diagram – Admin Memproses & Mengirim Pesanan
+actor Admin
+participant OrdersPage
+participant "App (state)" as App
+
+Admin -> OrdersPage: Buka "Pesanan", cari / pilih tab / tanggal
+OrdersPage --> Admin: Daftar pesanan terfilter + ringkasan tahap
+Admin -> OrdersPage: Klik "Lihat detail"
+OrdersPage -> App: setSelectedId(id_pesanan)
+OrdersPage --> Admin: Detail: barang, pembayaran VA, penerima, progres
+
+alt tahap = DIBUAT
+    Admin -> OrdersPage: Klik "Proses pesanan"
+    OrdersPage -> App: onAdvance(id_pesanan)
+    App --> OrdersPage: tahap → DIPROSES
+    OrdersPage --> Admin: Toast: "Pesanan ... mulai diproses"
+else pembayaran belum LUNAS
+    OrdersPage --> Admin: Tombol nonaktif + info menunggu konfirmasi pembayaran
+end
+
+alt tahap = DIPROSES
+    Admin -> OrdersPage: Klik "Kirim pesanan"
+    OrdersPage -> App: onAdvance(id_pesanan)
+    App --> OrdersPage: tahap → DIKIRIM + nomor resi
+    OrdersPage --> Admin: Toast: "Pesanan ... dikirim"
+else tahap = DIKIRIM
+    OrdersPage --> Admin: Info: pesanan dalam perjalanan (tanpa aksi)
+end
+@enduml
