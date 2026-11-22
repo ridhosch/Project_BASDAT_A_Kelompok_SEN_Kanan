@@ -429,12 +429,20 @@ async function getApiBase() {
 
 const SESSION_ID = `sess-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
+// Tiap web dibuka, pelanggan dianggap "tamu baru" (data kosong). Setelah memasukkan data motor,
+// identitas berpindah ke nomor plat sehingga data lama dengan plat yang sama bisa dipanggil kembali.
+let customerEmail = `${SESSION_ID}@tamu.senkanan.local`;
+
+const normalizePlate = (plate) => String(plate || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+const plateToEmail = (plate) => `${normalizePlate(plate)}@motor.senkanan.local`;
+
 function apiFetch(url, options = {}) {
   return fetch(url, {
     ...options,
     headers: {
       ...(options.headers || {}),
       'x-session-id': SESSION_ID,
+      'x-customer-email': customerEmail,
     },
   });
 }
@@ -478,6 +486,8 @@ export default function App() {
   const [infoModalKey, setInfoModalKey] = useState(null);
   const [isConsultModalOpen, setIsConsultModalOpen] = useState(false);
   const [isWelcomeModalOpen, setIsWelcomeModalOpen] = useState(true);
+  // Modal peringatan saat checkout tetapi data alamat / motor belum lengkap
+  const [checkoutAlert, setCheckoutAlert] = useState(null); // { missingAddress, missingMotor } | null
 
   const selectedVABank = VA_BANKS.find((v) => v.id === selectedVAId) || VA_BANKS[0];
   const selectedVA = { ...selectedVABank, number: vaNumbers[selectedVABank.id] };
@@ -520,6 +530,7 @@ export default function App() {
         setIsWelcomeModalOpen(false);
         setIsPaymentModalOpen(false);
         setIsEditingAddress(false);
+        setCheckoutAlert(null);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -696,15 +707,110 @@ export default function App() {
     navigateTo('katalog');
   };
 
+  // Salin keranjang, favorit (dan alamat) yang sudah diisi di sesi ini ke identitas pelanggan baru
+  const carryOverSessionData = async (apiBase, { withAddress }) => {
+    for (const item of cart) {
+      await apiFetch(`${apiBase}/cart`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productId: item.productId, qty: item.qty }),
+      });
+    }
+    if (wishlist.length > 0) {
+      const haveRes = await apiFetch(`${apiBase}/wishlist`);
+      const have = haveRes.ok ? await haveRes.json() : [];
+      for (const productId of wishlist) {
+        if (Array.isArray(have) && have.includes(productId)) continue;
+        await apiFetch(`${apiBase}/wishlist/toggle`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ productId }),
+        });
+      }
+    }
+    if (withAddress && isAddressComplete) {
+      await apiFetch(`${apiBase}/profile/address`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(address),
+      });
+    }
+  };
+
+  // Panggil kembali semua data milik pelanggan (motor, alamat, keranjang, favorit, pesanan)
+  const recallCustomerData = async (apiBase) => {
+    const [cartRes, wishRes, motorRes, addrRes, ordersRes] = await Promise.all([
+      apiFetch(`${apiBase}/cart`),
+      apiFetch(`${apiBase}/wishlist`),
+      apiFetch(`${apiBase}/profile/motor`),
+      apiFetch(`${apiBase}/profile/address`),
+      apiFetch(`${apiBase}/orders`),
+    ]);
+    if (cartRes.ok) {
+      const data = await cartRes.json();
+      setCart(Array.isArray(data) ? data : []);
+    }
+    if (wishRes.ok) {
+      const data = await wishRes.json();
+      setWishlist(Array.isArray(data) ? data : []);
+    }
+    if (motorRes.ok) {
+      const data = await motorRes.json();
+      if (data) {
+        setSavedMotor(data);
+        setMotorDraft(data);
+      }
+    }
+    if (addrRes.ok) {
+      const data = await addrRes.json();
+      if (data) {
+        setAddress(data);
+        setAddressDraft(data);
+      }
+    }
+    if (ordersRes.ok) {
+      const data = await ordersRes.json();
+      const list = Array.isArray(data) ? data : [];
+      setOrders(list);
+      setCurrentOrder(list.length > 0 ? list[0] : INITIAL_ORDER);
+    }
+  };
+
   const handleSaveMotor = async (e) => {
     if (e) e.preventDefault();
     if (!motorDraft.brand.trim() || !motorDraft.modelYear.trim()) {
       setMotorError('Isi minimal merek dan tipe/model motor sebelum menyimpan.');
       return;
     }
+    if (!normalizePlate(motorDraft.plateNumber)) {
+      setMotorError('Isi nomor plat agar datamu bisa dipanggil kembali saat web dibuka lagi.');
+      return;
+    }
     setMotorError('');
+
+    const previousEmail = customerEmail;
+    const nextEmail = plateToEmail(motorDraft.plateNumber);
+
     try {
       const apiBase = await getApiBase();
+
+      if (nextEmail !== previousEmail) {
+        // Ganti identitas ke plat ini, lalu cek apakah plat ini sudah pernah terdaftar
+        customerEmail = nextEmail;
+        const existingRes = await apiFetch(`${apiBase}/profile/motor`);
+        const existing = existingRes.ok ? await existingRes.json() : null;
+
+        if (existing) {
+          await carryOverSessionData(apiBase, { withAddress: false });
+          await recallCustomerData(apiBase);
+          showToast(`Data untuk plat ${motorDraft.plateNumber.toUpperCase()} ditemukan.`);
+          return;
+        }
+
+        // Plat baru: bawa data yang sudah diisi di sesi ini
+        await carryOverSessionData(apiBase, { withAddress: true });
+      }
+
       const res = await apiFetch(`${apiBase}/profile/motor`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -714,8 +820,9 @@ export default function App() {
       if (!res.ok) throw new Error(data.message || 'Gagal menyimpan data motor');
       setSavedMotor(data);
       setMotorDraft(data);
-      showToast('Profil Motor Saya berhasil disimpan ke database.');
+      showToast('Profil Motor Saya berhasil disimpan.');
     } catch (err) {
+      customerEmail = previousEmail;
       showToast(err.message || 'Gagal terhubung ke database.');
     }
   };
@@ -745,8 +852,31 @@ export default function App() {
     }
   };
 
+  // Validasi kelengkapan data sebelum checkout
+  const isAddressComplete =
+    Boolean(address.recipient?.trim()) &&
+    Boolean(address.phone?.trim()) &&
+    address.phone.trim() !== '-' &&
+    Boolean(address.street?.trim());
+  const isMotorComplete = Boolean(savedMotor?.brand?.trim() && savedMotor?.modelYear?.trim());
+
+  const handleRequestPayment = () => {
+    if (cart.length === 0) return;
+    const missingAddress = !isAddressComplete;
+    const missingMotor = !isMotorComplete;
+    if (missingAddress || missingMotor) {
+      setCheckoutAlert({ missingAddress, missingMotor });
+      return;
+    }
+    setIsPaymentModalOpen(true);
+  };
+
   const handleCheckoutSubmit = async () => {
     if (cart.length === 0) return;
+    if (!isAddressComplete || !isMotorComplete) {
+      setCheckoutAlert({ missingAddress: !isAddressComplete, missingMotor: !isMotorComplete });
+      return;
+    }
     setIsSubmittingOrder(true);
 
     try {
@@ -1052,7 +1182,7 @@ export default function App() {
             selectedVAId={selectedVAId}
             setSelectedVAId={setSelectedVAId}
             vaNumbers={vaNumbers}
-            onOpenPaymentModal={() => setIsPaymentModalOpen(true)}
+            onOpenPaymentModal={handleRequestPayment}
             isSubmittingOrder={isSubmittingOrder}
             onOpenConsult={() => setIsConsultModalOpen(true)}
             showToast={showToast}
@@ -1307,6 +1437,111 @@ export default function App() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Checkout Alert Modal: alamat / data motor belum lengkap */}
+      {checkoutAlert && (
+        <div
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="checkout-alert-title"
+          aria-describedby="checkout-alert-desc"
+          className="fixed inset-0 z-[60] bg-black/75 flex items-center justify-center p-4"
+          onClick={() => setCheckoutAlert(null)}
+        >
+          <div
+            className="bg-[#1E1E1E] border border-white/15 border-t-[6px] border-t-[#FFD000] rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <span
+                  aria-hidden="true"
+                  className="w-11 h-11 shrink-0 rounded-full bg-[#FFD000] text-[#111111] inline-flex items-center justify-center text-xl font-black"
+                >
+                  !
+                </span>
+                <div>
+                  <Eyebrow>DATA BELUM LENGKAP</Eyebrow>
+                  <h2 id="checkout-alert-title" className="text-xl font-black text-white mt-1">
+                    Lengkapi data dulu sebelum checkout
+                  </h2>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCheckoutAlert(null)}
+                aria-label="Tutup peringatan"
+                className="w-10 h-10 rounded-lg bg-[#252525] text-zinc-300 hover:text-white inline-flex items-center justify-center shrink-0"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p id="checkout-alert-desc" className="text-xs text-zinc-300 leading-relaxed">
+              Pesananmu belum bisa diproses karena data berikut masih kosong:
+            </p>
+
+            <ul className="space-y-2.5 text-xs">
+              {checkoutAlert.missingAddress && (
+                <li className="bg-[#252525] border border-white/10 rounded-xl p-3.5">
+                  <p className="font-bold text-white">Alamat penerima belum diisi</p>
+                  <p className="text-zinc-400 mt-1 leading-relaxed">
+                    Isi nama penerima, nomor telepon, dan alamat lengkap agar kurir tahu ke mana part dikirim.
+                  </p>
+                </li>
+              )}
+              {checkoutAlert.missingMotor && (
+                <li className="bg-[#252525] border border-white/10 rounded-xl p-3.5">
+                  <p className="font-bold text-white">Identitas motor belum diisi</p>
+                  <p className="text-zinc-400 mt-1 leading-relaxed">
+                    Isi merek dan tipe/tahun motor di Motor Saya supaya part yang dipesan sesuai kendaraanmu.
+                  </p>
+                </li>
+              )}
+            </ul>
+
+            <div className="flex flex-col-reverse sm:flex-row gap-3">
+              <button
+                type="button"
+                onClick={() => setCheckoutAlert(null)}
+                className="min-h-[46px] px-4 rounded-xl bg-[#252525] hover:bg-[#2E2E2E] text-zinc-300 font-semibold text-xs"
+              >
+                Nanti saja
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const { missingAddress } = checkoutAlert;
+                  setCheckoutAlert(null);
+                  if (missingAddress) {
+                    setAddressDraft({ ...address });
+                    setIsEditingAddress(true);
+                  } else {
+                    navigateTo('motor-saya');
+                  }
+                }}
+                className="flex-1 min-h-[46px] px-5 rounded-xl bg-[#FFD000] hover:bg-[#ffe033] text-[#111111] font-extrabold text-xs inline-flex items-center justify-center gap-2 transition-colors"
+              >
+                <span>{checkoutAlert.missingAddress ? 'Isi Alamat Sekarang' : 'Isi Data Motor'}</span>
+                <span aria-hidden="true">→</span>
+              </button>
+            </div>
+
+            {checkoutAlert.missingAddress && checkoutAlert.missingMotor && (
+              <button
+                type="button"
+                onClick={() => {
+                  setCheckoutAlert(null);
+                  navigateTo('motor-saya');
+                }}
+                className="w-full text-center text-xs font-bold text-[#FFD000] hover:underline min-h-[36px]"
+              >
+                Isi data motor dulu
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -2339,6 +2574,10 @@ function MotorSayaView({
                 placeholder="Masukkan nomor plat kendaraan"
                 className="w-full min-h-[44px] bg-[#2C2C2C] border border-white/10 rounded-lg px-3.5 text-xs text-white placeholder:text-zinc-500 focus:border-[#FFD000]"
               />
+              <p className="text-[11px] text-zinc-500 mt-1.5 leading-relaxed">
+                Wajib diisi. 
+                Pernah belanja sebelumnya? Masukkan plat yang sama agar data mu kembali terlihat.
+              </p>
             </div>
           </div>
 
