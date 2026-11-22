@@ -1,0 +1,27 @@
+@startuml
+title Sequence Diagram – Mendaftarkan Data Motor
+
+actor Pelanggan
+participant "MotorSayaView" as MotorSayaView
+participant "App (state)" as App
+
+Pelanggan -> MotorSayaView: Isi nama pemilik, merek, tipe/model, plat
+
+MotorSayaView -> App: setMotorDraft(data)
+
+MotorSayaView --> Pelanggan: Ringkasan data motor diperbarui
+
+Pelanggan -> MotorSayaView: Klik "Simpan Data Motor"
+
+MotorSayaView -> App: handleSaveMotor()
+
+alt merek & tipe/model terisi
+    App --> MotorSayaView: setSavedMotor(data); setMotorError("")
+    App --> Pelanggan: Toast: "Profil Motor Saya berhasil disimpan"
+
+else merek / tipe kosong
+    App --> MotorSayaView: setMotorError("Isi minimal merek dan tipe/model...")
+    App --> Pelanggan: Tampilkan pesan error
+end
+
+@enduml
