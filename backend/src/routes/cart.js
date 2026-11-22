@@ -1,90 +1,84 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db');
+const { getPelangganId, findProdukIdBySku } = require('../lib/utils');
 
-const getSessionId = (req) => req.headers['x-session-id'] || req.query.sessionId || 'guest-default';
+async function getCart(idPelanggan) {
+  const [rows] = await pool.query(
+    `SELECT pr.sku AS productId, k.jumlah AS qty, pr.nama_produk AS title,
+            pr.harga AS price, pr.gambar AS image, pr.spesifikasi AS spec
+     FROM keranjang k
+     JOIN produk pr ON pr.id_produk = k.id_produk
+     WHERE k.id_pelanggan = ?
+     ORDER BY k.id_keranjang ASC`,
+    [idPelanggan]
+  );
+  return rows;
+}
 
-// GET /api/cart - Ambil item keranjang
+// GET /api/cart
 router.get('/', async (req, res) => {
   try {
-    const sessionId = getSessionId(req);
-    const [rows] = await pool.query(
-      `SELECT c.product_id AS productId, c.qty, p.title, p.price, p.image, p.spec
-       FROM cart_items c
-       JOIN products p ON c.product_id = p.id
-       WHERE c.session_id = ?
-       ORDER BY c.id ASC`,
-      [sessionId]
-    );
-    res.json(rows);
+    const idPelanggan = await getPelangganId(req);
+    res.json(await getCart(idPelanggan));
   } catch (err) {
     res.status(500).json({ message: 'Gagal mengambil keranjang', error: err.message });
   }
 });
 
-// POST /api/cart - Tambah produk ke keranjang
+// POST /api/cart - tambah produk (productId = SKU)
 router.post('/', async (req, res) => {
   try {
-    const sessionId = getSessionId(req);
-    const { productId, qty = 1 } = req.body;
+    const { productId } = req.body;
+    const qty = Math.max(1, parseInt(req.body.qty, 10) || 1);
     if (!productId) return res.status(400).json({ message: 'productId wajib diisi' });
 
-    await pool.query(
-      `INSERT INTO cart_items (session_id, product_id, qty)
-       VALUES (?, ?, ?)
-       ON DUPLICATE KEY UPDATE qty = qty + VALUES(qty)`,
-      [sessionId, productId, Number(qty)]
-    );
+    const idProduk = await findProdukIdBySku(productId);
+    if (!idProduk) return res.status(404).json({ message: 'Produk tidak ditemukan' });
 
-    const [rows] = await pool.query(
-      'SELECT product_id AS productId, qty FROM cart_items WHERE session_id = ? ORDER BY id ASC',
-      [sessionId]
+    const idPelanggan = await getPelangganId(req);
+    await pool.query(
+      `INSERT INTO keranjang (id_pelanggan, id_produk, jumlah)
+       VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE jumlah = jumlah + VALUES(jumlah)`,
+      [idPelanggan, idProduk, qty]
     );
-    res.status(201).json(rows);
+    res.status(201).json(await getCart(idPelanggan));
   } catch (err) {
     res.status(500).json({ message: 'Gagal menambah item keranjang', error: err.message });
   }
 });
 
-// PATCH /api/cart/:productId - Ubah jumlah (qty) item keranjang
+// PATCH /api/cart/:productId - ubah jumlah
 router.patch('/:productId', async (req, res) => {
   try {
-    const sessionId = getSessionId(req);
-    const { productId } = req.params;
-    const { qty } = req.body;
-
-    const finalQty = Math.max(1, Number(qty || 1));
-    await pool.query(
-      'UPDATE cart_items SET qty = ? WHERE session_id = ? AND product_id = ?',
-      [finalQty, sessionId, productId]
-    );
-
-    const [rows] = await pool.query(
-      'SELECT product_id AS productId, qty FROM cart_items WHERE session_id = ? ORDER BY id ASC',
-      [sessionId]
-    );
-    res.json(rows);
+    const qty = Math.max(1, parseInt(req.body.qty, 10) || 1);
+    const idPelanggan = await getPelangganId(req);
+    const idProduk = await findProdukIdBySku(req.params.productId);
+    if (idProduk) {
+      await pool.query(
+        'UPDATE keranjang SET jumlah = ? WHERE id_pelanggan = ? AND id_produk = ?',
+        [qty, idPelanggan, idProduk]
+      );
+    }
+    res.json(await getCart(idPelanggan));
   } catch (err) {
     res.status(500).json({ message: 'Gagal memperbarui qty keranjang', error: err.message });
   }
 });
 
-// DELETE /api/cart/:productId - Hapus item dari keranjang
+// DELETE /api/cart/:productId
 router.delete('/:productId', async (req, res) => {
   try {
-    const sessionId = getSessionId(req);
-    const { productId } = req.params;
-
-    await pool.query('DELETE FROM cart_items WHERE session_id = ? AND product_id = ?', [
-      sessionId,
-      productId,
-    ]);
-
-    const [rows] = await pool.query(
-      'SELECT product_id AS productId, qty FROM cart_items WHERE session_id = ? ORDER BY id ASC',
-      [sessionId]
-    );
-    res.json(rows);
+    const idPelanggan = await getPelangganId(req);
+    const idProduk = await findProdukIdBySku(req.params.productId);
+    if (idProduk) {
+      await pool.query('DELETE FROM keranjang WHERE id_pelanggan = ? AND id_produk = ?', [
+        idPelanggan,
+        idProduk,
+      ]);
+    }
+    res.json(await getCart(idPelanggan));
   } catch (err) {
     res.status(500).json({ message: 'Gagal menghapus item keranjang', error: err.message });
   }

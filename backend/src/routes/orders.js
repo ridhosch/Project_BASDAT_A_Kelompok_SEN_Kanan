@@ -1,283 +1,429 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db');
+const {
+  HttpError,
+  getPelangganId,
+  getAdminId,
+  formatLabel,
+  toDateStr,
+  addBusinessDays,
+} = require('../lib/utils');
 
-const getSessionId = (req) => req.headers['x-session-id'] || req.query.sessionId || 'guest-default';
+const SERVICE_FEE = 1000;
+const KURIR = {
+  reg: { nama: 'JNE REG', ongkir: 18000, hariMin: 2, hariMax: 3, label: '2-3 hari kerja' },
+  yes: { nama: 'JNE YES', ongkir: 28000, hariMin: 1, hariMax: 1, label: '1 hari kerja' },
+};
+const INSURANCE_COST = 1800;
+const BANK_LABEL = { BCA: 'BCA', BNI: 'BNI', MANDIRI: 'Mandiri' };
+const TAHAP = ['DIBUAT', 'DIPROSES', 'DIKIRIM', 'SELESAI'];
 
-async function getOrderWithItems(orderRow) {
-  const [items] = await pool.query(
-    `SELECT oi.product_id AS productId, oi.product_title AS title, oi.product_title AS name,
-            oi.price, oi.qty, COALESCE(p.image, '') AS image
-     FROM order_items oi
-     LEFT JOIN products p ON p.id = oi.product_id
-     WHERE oi.order_id = ?`,
-    [orderRow.id]
+const SELECT_PESANAN = `
+  SELECT p.*,
+         g.nama_penerima, g.no_hp_penerima, g.email_penerima, g.alamat_lengkap,
+         g.catatan_alamat, g.kurir, g.ongkir, g.asuransi, g.no_resi,
+         g.estimasi_awal, g.estimasi_akhir,
+         b.bank, b.no_va, b.status AS status_bayar, b.waktu_bayar,
+         b.waktu_konfirmasi, b.catatan_admin,
+         (SELECT a.label FROM alamat_pengiriman a
+           WHERE a.id_pelanggan = p.id_pelanggan ORDER BY a.id_alamat ASC LIMIT 1) AS label_alamat
+  FROM pesanan p
+  LEFT JOIN pengiriman g ON g.id_pesanan = p.id_pesanan
+  LEFT JOIN pembayaran b ON b.id_pesanan = p.id_pesanan`;
+
+// "#SK-261122-1234" atau "SK-261122-1234" -> id_pesanan
+async function resolveIdPesanan(param, db = pool) {
+  const nomor = decodeURIComponent(String(param)).replace(/^#/, '');
+  const [rows] = await db.query('SELECT id_pesanan FROM pesanan WHERE nomor_pesanan = ?', [nomor]);
+  return rows.length ? rows[0].id_pesanan : null;
+}
+
+// Ambil pesanan (beserta item) dalam bentuk yang dipakai senkanan-app & senkanan-admin
+async function loadOrders(whereSql = '', params = [], tail = '') {
+  const [rows] = await pool.query(
+    `${SELECT_PESANAN} ${whereSql} ORDER BY p.tanggal_pesanan DESC, p.id_pesanan DESC ${tail}`,
+    params
   );
+  if (rows.length === 0) return [];
+
+  const ids = rows.map((r) => r.id_pesanan);
+  const [items] = await pool.query(
+    `SELECT d.id_pesanan, pr.sku AS productId, pr.nama_produk AS title,
+            d.harga_satuan AS price, d.jumlah AS qty, COALESCE(pr.gambar, '') AS image
+     FROM detail_pesanan d
+     JOIN produk pr ON pr.id_produk = d.id_produk
+     WHERE d.id_pesanan IN (${ids.map(() => '?').join(',')})
+     ORDER BY pr.id_produk ASC`,
+    ids
+  );
+  const itemsByOrder = new Map();
+  for (const it of items) {
+    if (!itemsByOrder.has(it.id_pesanan)) itemsByOrder.set(it.id_pesanan, []);
+    itemsByOrder.get(it.id_pesanan).push({
+      productId: it.productId,
+      title: it.title,
+      name: it.title,
+      price: it.price,
+      qty: it.qty,
+      image: it.image,
+    });
+  }
+
+  return rows.map((r) => formatOrder(r, itemsByOrder.get(r.id_pesanan) || []));
+}
+
+function formatOrder(r, items) {
+  const kurirKey = r.kurir === 'JNE YES' ? 'yes' : 'reg';
+  const bankLabel = BANK_LABEL[r.bank] || r.bank || '';
+  const va = r.no_va || '';
+  const paymentMethod = `${bankLabel} Virtual Account${va ? ` •••• ${va.slice(-4)}` : ''}`;
 
   return {
-    id: orderRow.id,
-    customer: orderRow.recipient_name || 'Pelanggan',
-    createdAt: orderRow.created_at_label,
-    estimatedArrival: orderRow.estimated_arrival,
-    stage: orderRow.stage,
-    courier: orderRow.courier,
-    trackingNumber: orderRow.tracking_number,
+    id: `#${r.nomor_pesanan}`,
+    customer: r.nama_penerima || 'Pelanggan',
+    createdAt: formatLabel(r.tanggal_pesanan),
+    estimatedArrival: KURIR[kurirKey].label,
+    estimatedFrom: r.estimasi_awal,
+    estimatedTo: r.estimasi_akhir,
+    stage: String(r.tahap || 'DIBUAT').toLowerCase(),
+    courier: r.kurir || '',
+    trackingNumber: r.no_resi || '',
     items,
-    shippingCost: orderRow.shipping_cost,
-    insuranceCost: orderRow.insurance_cost,
-    serviceFee: orderRow.service_fee,
-    totalAmount: orderRow.total_amount,
-    paymentMethod: orderRow.payment_method,
-    paymentType: orderRow.payment_type,
-    vaNumber: orderRow.va_number || '',
-    paidAt: orderRow.paid_at,
+    shippingCost: r.ongkir || 0,
+    insuranceCost: r.asuransi || 0,
+    serviceFee: r.biaya_layanan,
+    totalAmount: r.total,
+    paymentMethod,
+    paymentType: 'VA',
+    vaNumber: va,
+    paidAt: formatLabel(r.waktu_bayar),
     payment: {
-      method: orderRow.payment_method,
-      type: orderRow.payment_type,
-      va: orderRow.va_number || '',
-      status: orderRow.payment_status || 'menunggu',
-      note: orderRow.payment_note || '',
-      confirmedAt: orderRow.confirmed_at || '',
+      method: paymentMethod,
+      bank: bankLabel,
+      type: 'VA',
+      va,
+      status: String(r.status_bayar || 'MENUNGGU').toLowerCase(),
+      note: r.catatan_admin || '',
+      paidAt: formatLabel(r.waktu_bayar),
+      confirmedAt: formatLabel(r.waktu_konfirmasi),
     },
     address: {
-      recipient: orderRow.recipient_name,
-      phone: orderRow.recipient_phone,
-      email: orderRow.recipient_email,
-      label: orderRow.shipping_label,
-      street: orderRow.shipping_street,
-      note: orderRow.shipping_note,
+      recipient: r.nama_penerima,
+      phone: r.no_hp_penerima || '',
+      email: r.email_penerima || '',
+      label: r.label_alamat || 'Rumah • Utama',
+      street: r.alamat_lengkap,
+      note: r.catatan_alamat || '',
     },
-    note: orderRow.order_note || '',
+    note: r.catatan || '',
   };
 }
 
-// GET /api/orders - Ambil semua pesanan user berdasarkan session (terbaru di atas)
+// GET /api/orders - pesanan milik pelanggan (terbaru di atas)
 router.get('/', async (req, res) => {
   try {
-    const sessionId = getSessionId(req);
-    const [rows] = await pool.query(
-      'SELECT * FROM orders WHERE session_id = ? ORDER BY created_at DESC',
-      [sessionId]
-    );
-    const orders = await Promise.all(rows.map(getOrderWithItems));
-    res.json(orders);
+    const idPelanggan = await getPelangganId(req);
+    res.json(await loadOrders('WHERE p.id_pelanggan = ?', [idPelanggan]));
   } catch (err) {
     res.status(500).json({ message: 'Gagal mengambil daftar pesanan', error: err.message });
   }
 });
 
-// GET /api/orders/all - Ambil SEMUA pesanan dari database untuk Panel Admin
+// GET /api/orders/all - semua pesanan (Panel Admin)
 router.get('/all', async (req, res) => {
   try {
-    const [rows] = await pool.query('SELECT * FROM orders ORDER BY created_at DESC');
-    const orders = await Promise.all(rows.map(getOrderWithItems));
-    res.json(orders);
+    res.json(await loadOrders());
   } catch (err) {
     res.status(500).json({ message: 'Gagal mengambil semua pesanan', error: err.message });
   }
 });
 
-// GET /api/orders/latest - Ambil pesanan terakhir
+// GET /api/orders/latest - pesanan terakhir milik pelanggan
 router.get('/latest', async (req, res) => {
   try {
-    const sessionId = getSessionId(req);
-    const [rows] = await pool.query(
-      'SELECT * FROM orders WHERE session_id = ? ORDER BY created_at DESC LIMIT 1',
-      [sessionId]
-    );
-    if (rows.length === 0) return res.json(null);
-    const order = await getOrderWithItems(rows[0]);
-    res.json(order);
+    const idPelanggan = await getPelangganId(req);
+    const list = await loadOrders('WHERE p.id_pelanggan = ?', [idPelanggan], 'LIMIT 1');
+    res.json(list[0] || null);
   } catch (err) {
     res.status(500).json({ message: 'Gagal mengambil pesanan terbaru', error: err.message });
   }
 });
 
-// POST /api/orders - Checkout & buat pesanan baru dari senkanan-app
+// POST /api/orders - checkout dari senkanan-app
 router.post('/', async (req, res) => {
+  const {
+    items,
+    shippingMethod = 'reg',
+    withInsurance = true,
+    paymentMethod = 'BCA Virtual Account',
+    vaNumber = '',
+    address = {},
+    note = '',
+    clearCartAfter = true,
+  } = req.body;
+
+  if (!Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ message: 'Keranjang belanja kosong' });
+  }
+  const kurir = KURIR[shippingMethod];
+  if (!kurir) return res.status(400).json({ message: 'Metode pengiriman tidak valid' });
+
+  const va = String(vaNumber).replace(/\D/g, '');
+  if (va.length !== 16) {
+    return res.status(400).json({ message: 'Nomor Virtual Account harus 16 digit' });
+  }
+  const bankMatch = String(paymentMethod).toUpperCase().match(/BCA|BNI|MANDIRI/);
+  const bank = bankMatch ? bankMatch[0] : 'BCA';
+
   const conn = await pool.getConnection();
   try {
-    const sessionId = getSessionId(req);
-    const {
-      items,
-      shippingMethod = 'reg',
-      withInsurance = true,
-      paymentMethod = 'BCA Virtual Account',
-      vaNumber = '',
-      address,
-      note = '',
-      clearCartAfter = true,
-    } = req.body;
-
-    if (!items || !Array.isArray(items) || items.length === 0) {
-      conn.release();
-      return res.status(400).json({ message: 'Keranjang belanja kosong' });
+    // Gabungkan item dengan SKU yang sama (PK detail_pesanan = id_pesanan + id_produk)
+    const wanted = new Map();
+    for (const it of items) {
+      if (!it.productId) throw new HttpError(400, 'productId pada item wajib diisi');
+      const qty = Math.max(1, parseInt(it.qty, 10) || 1);
+      wanted.set(it.productId, (wanted.get(it.productId) || 0) + qty);
     }
 
     await conn.beginTransaction();
 
-    const productIds = items.map((i) => i.productId);
-    const [dbProducts] = await conn.query(
-      `SELECT id, title, price, stock FROM products WHERE id IN (${productIds.map(() => '?').join(',')})`,
-      productIds
+    const skus = [...wanted.keys()];
+    const [produkRows] = await conn.query(
+      `SELECT id_produk, sku, nama_produk, harga, stok
+       FROM produk WHERE sku IN (${skus.map(() => '?').join(',')}) FOR UPDATE`,
+      skus
     );
-    const productMap = new Map(dbProducts.map((p) => [p.id, p]));
+    const produkBySku = new Map(produkRows.map((p) => [p.sku, p]));
 
     let subtotal = 0;
-    const verifiedItems = [];
-
-    for (const item of items) {
-      const prod = productMap.get(item.productId);
-      if (!prod) {
-        throw new Error(`Produk ${item.productId} tidak ditemukan di database`);
+    for (const [sku, qty] of wanted) {
+      const prod = produkBySku.get(sku);
+      if (!prod) throw new HttpError(400, `Produk ${sku} tidak ditemukan di database`);
+      if (prod.stok < qty) {
+        throw new HttpError(400, `Stok ${prod.nama_produk} tidak mencukupi (sisa ${prod.stok})`);
       }
-      const qty = Math.max(1, Number(item.qty || 1));
-      subtotal += prod.price * qty;
-      verifiedItems.push({
-        productId: prod.id,
-        title: prod.title,
-        price: prod.price,
-        qty,
-      });
-
-      const nextStock = Math.max(0, Number(prod.stock || 0) - qty);
-      const nextStatus = nextStock <= 0 ? 'habis' : nextStock <= 5 ? 'terbatas' : 'tersedia';
-      const nextLabel = nextStock <= 0 ? 'Stok habis' : nextStock <= 5 ? 'Stok terbatas' : 'Stok tersedia';
-
-      await conn.query(
-        'UPDATE products SET stock = ?, stock_status = ?, stock_label = ? WHERE id = ?',
-        [nextStock, nextStatus, nextLabel, prod.id]
-      );
+      subtotal += prod.harga * qty;
     }
 
-    const shippingCost = shippingMethod === 'yes' ? 28000 : 18000;
-    const insuranceCost = withInsurance ? 1800 : 0;
-    const serviceFee = 1000;
-    const totalAmount = subtotal + shippingCost + insuranceCost + serviceFee;
+    const ongkir = kurir.ongkir;
+    const asuransi = withInsurance ? INSURANCE_COST : 0;
+    const total = subtotal + ongkir + asuransi + SERVICE_FEE;
 
+    const idPelanggan = await getPelangganId(req, conn);
     const now = new Date();
-    const dateCode = now.toISOString().slice(2, 10).replace(/-/g, '');
-    const orderId = `#SK-${dateCode}-${Math.floor(1000 + Math.random() * 9000)}`;
-    const trackingNumber = `SK${dateCode}${Math.floor(100000 + Math.random() * 900000)}`;
-    const courier = shippingMethod === 'yes' ? 'JNE YES' : 'JNE Reguler';
-    const estimatedArrival = shippingMethod === 'yes' ? '1-2 hari kerja' : '2-3 hari kerja';
-    const paymentType = 'VA';
+    const dateCode = `${String(now.getFullYear()).slice(2)}${String(now.getMonth() + 1).padStart(
+      2,
+      '0'
+    )}${String(now.getDate()).padStart(2, '0')}`;
 
-    const bulan = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-    const pad = (v) => String(v).padStart(2, '0');
-    const formattedNow = `${now.getDate()} ${bulan[now.getMonth()]} ${now.getFullYear()} • ${pad(now.getHours())}.${pad(now.getMinutes())} WIB`;
+    // nomor_pesanan format SK-YYMMDD-NNNN (UNIQUE) -> coba ulang jika bentrok
+    let idPesanan = null;
+    let nomorPesanan = '';
+    for (let attempt = 0; attempt < 8 && !idPesanan; attempt += 1) {
+      nomorPesanan = `SK-${dateCode}-${Math.floor(1000 + Math.random() * 9000)}`;
+      try {
+        const [ins] = await conn.query(
+          `INSERT INTO pesanan
+             (nomor_pesanan, id_pelanggan, tanggal_pesanan, tahap, biaya_layanan, total, catatan)
+           VALUES (?, ?, ?, 'DIBUAT', ?, ?, ?)`,
+          [nomorPesanan, idPelanggan, now, SERVICE_FEE, total, String(note).slice(0, 255)]
+        );
+        idPesanan = ins.insertId;
+      } catch (err) {
+        if (err.code !== 'ER_DUP_ENTRY') throw err;
+      }
+    }
+    if (!idPesanan) throw new HttpError(500, 'Gagal membuat nomor pesanan unik, coba lagi');
+
+    for (const [sku, qty] of wanted) {
+      const prod = produkBySku.get(sku);
+      await conn.query(
+        'INSERT INTO detail_pesanan (id_pesanan, id_produk, jumlah, harga_satuan) VALUES (?, ?, ?, ?)',
+        [idPesanan, prod.id_produk, qty, prod.harga]
+      );
+      await conn.query('UPDATE produk SET stok = stok - ? WHERE id_produk = ?', [qty, prod.id_produk]);
+    }
 
     await conn.query(
-      `INSERT INTO orders (
-        id, session_id, stage, courier, tracking_number, estimated_arrival,
-        subtotal, shipping_cost, insurance_cost, service_fee, total_amount,
-        payment_method, payment_type, va_number, payment_status, paid_at,
-        recipient_name, recipient_phone, recipient_email, shipping_label, shipping_street, shipping_note,
-        order_note, created_at_label
-      ) VALUES (?, ?, 'dibuat', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'menunggu', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO pengiriman
+         (id_pesanan, nama_penerima, no_hp_penerima, email_penerima, alamat_lengkap,
+          catatan_alamat, kurir, ongkir, asuransi, estimasi_awal, estimasi_akhir)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        orderId,
-        sessionId,
-        courier,
-        trackingNumber,
-        estimatedArrival,
-        subtotal,
-        shippingCost,
-        insuranceCost,
-        serviceFee,
-        totalAmount,
-        paymentMethod,
-        paymentType,
-        vaNumber,
-        formattedNow,
-        address?.recipient || 'Pelanggan',
-        address?.phone || '',
-        address?.email || '',
-        address?.label || 'Rumah • Utama',
-        address?.street || '',
-        address?.note || '',
-        note,
-        formattedNow,
+        idPesanan,
+        address.recipient || 'Pelanggan SENkanan',
+        address.phone || '',
+        address.email || '',
+        address.street || '',
+        String(address.note || '').slice(0, 255),
+        kurir.nama,
+        ongkir,
+        asuransi,
+        toDateStr(addBusinessDays(now, kurir.hariMin)),
+        toDateStr(addBusinessDays(now, kurir.hariMax)),
       ]
     );
 
-    for (const vi of verifiedItems) {
-      await conn.query(
-        'INSERT INTO order_items (order_id, product_id, product_title, price, qty) VALUES (?, ?, ?, ?, ?)',
-        [orderId, vi.productId, vi.title, vi.price, vi.qty]
-      );
-    }
+    await conn.query(
+      `INSERT INTO pembayaran (id_pesanan, bank, no_va, jumlah, status, waktu_bayar)
+       VALUES (?, ?, ?, ?, 'MENUNGGU', ?)`,
+      [idPesanan, bank, va, total, now]
+    );
 
     if (clearCartAfter) {
-      await conn.query('DELETE FROM cart_items WHERE session_id = ?', [sessionId]);
+      await conn.query('DELETE FROM keranjang WHERE id_pelanggan = ?', [idPelanggan]);
     }
 
     await conn.commit();
-    conn.release();
 
-    const [createdRows] = await pool.query('SELECT * FROM orders WHERE id = ?', [orderId]);
-    const createdOrder = await getOrderWithItems(createdRows[0]);
-    res.status(201).json(createdOrder);
+    const [created] = await loadOrders('WHERE p.id_pesanan = ?', [idPesanan]);
+    res.status(201).json(created);
   } catch (err) {
     await conn.rollback();
-    conn.release();
+    if (err instanceof HttpError) return res.status(err.status).json({ message: err.message });
     console.error('Error POST /api/orders:', err);
     res.status(500).json({ message: 'Gagal membuat pesanan', error: err.message });
+  } finally {
+    conn.release();
   }
 });
 
-// PATCH /api/orders/:id/stage - Update status progres pengiriman pesanan
+// PATCH /api/orders/:id/stage - majukan tahap pesanan (Panel Admin)
 router.patch('/:id/stage', async (req, res) => {
   try {
-    const orderId = decodeURIComponent(req.params.id);
-    const { stage } = req.body;
-    const validStages = ['dibuat', 'diproses', 'dikirim', 'selesai', 'dibatalkan'];
-    if (!validStages.includes(stage)) {
+    const tahap = String(req.body.stage || '').toUpperCase();
+    if (!TAHAP.includes(tahap)) {
       return res.status(400).json({ message: 'Stage pesanan tidak valid' });
     }
 
-    await pool.query('UPDATE orders SET stage = ? WHERE id = ?', [stage, orderId]);
-    const [rows] = await pool.query('SELECT * FROM orders WHERE id = ?', [orderId]);
-    if (rows.length === 0) return res.status(404).json({ message: 'Pesanan tidak ditemukan' });
+    const idPesanan = await resolveIdPesanan(req.params.id);
+    if (!idPesanan) return res.status(404).json({ message: 'Pesanan tidak ditemukan' });
 
-    const updated = await getOrderWithItems(rows[0]);
+    if (tahap !== 'DIBUAT') {
+      const [bayar] = await pool.query('SELECT status FROM pembayaran WHERE id_pesanan = ?', [
+        idPesanan,
+      ]);
+      if (!bayar.length || bayar[0].status !== 'LUNAS') {
+        return res
+          .status(400)
+          .json({ message: 'Pesanan hanya bisa diproses setelah pembayaran LUNAS' });
+      }
+    }
+
+    const now = new Date();
+    const sets = ['tahap = ?'];
+    const vals = [tahap];
+    if (tahap === 'DIPROSES' || tahap === 'DIKIRIM' || tahap === 'SELESAI') {
+      sets.push('waktu_diproses = COALESCE(waktu_diproses, ?)');
+      vals.push(now);
+    }
+    if (tahap === 'DIKIRIM' || tahap === 'SELESAI') {
+      sets.push('waktu_dikirim = COALESCE(waktu_dikirim, ?)');
+      vals.push(now);
+    }
+    if (tahap === 'SELESAI') {
+      sets.push('waktu_tiba = COALESCE(waktu_tiba, ?)');
+      vals.push(now);
+    }
+    await pool.query(`UPDATE pesanan SET ${sets.join(', ')} WHERE id_pesanan = ?`, [
+      ...vals,
+      idPesanan,
+    ]);
+
+    // Nomor resi baru dibuat saat pesanan dikirim
+    if (tahap === 'DIKIRIM' || tahap === 'SELESAI') {
+      const resi = `SK${String(now.getFullYear()).slice(2)}${String(now.getMonth() + 1).padStart(
+        2,
+        '0'
+      )}${String(now.getDate()).padStart(2, '0')}${Math.floor(100000 + Math.random() * 900000)}`;
+      await pool.query('UPDATE pengiriman SET no_resi = COALESCE(no_resi, ?) WHERE id_pesanan = ?', [
+        resi,
+        idPesanan,
+      ]);
+    }
+
+    const [updated] = await loadOrders('WHERE p.id_pesanan = ?', [idPesanan]);
     res.json(updated);
   } catch (err) {
     res.status(500).json({ message: 'Gagal memperbarui status pesanan', error: err.message });
   }
 });
 
-// PATCH /api/orders/:id/payment - Konfirmasi atau tolak pembayaran VA oleh Admin
+// PATCH /api/orders/:id/payment - konfirmasi / tolak pembayaran VA oleh Admin
 router.patch('/:id/payment', async (req, res) => {
   try {
-    const orderId = decodeURIComponent(req.params.id);
-    const { status, note = '', confirmedAt = '' } = req.body;
-    if (!['menunggu', 'lunas', 'ditolak'].includes(status)) {
+    const status = String(req.body.status || '').toUpperCase();
+    const note = String(req.body.note || '').slice(0, 255);
+    if (!['MENUNGGU', 'LUNAS', 'DITOLAK'].includes(status)) {
       return res.status(400).json({ message: 'Status pembayaran tidak valid' });
     }
 
+    const idPesanan = await resolveIdPesanan(req.params.id);
+    if (!idPesanan) return res.status(404).json({ message: 'Pesanan tidak ditemukan' });
+
+    const decided = status !== 'MENUNGGU';
+    const idAdmin = decided ? await getAdminId() : null;
     await pool.query(
-      'UPDATE orders SET payment_status = ?, payment_note = ?, confirmed_at = ? WHERE id = ?',
-      [status, note, status === 'lunas' ? confirmedAt : '', orderId]
+      `UPDATE pembayaran
+       SET status = ?, catatan_admin = ?, id_admin = ?, waktu_konfirmasi = ?
+       WHERE id_pesanan = ?`,
+      [status, note, idAdmin, status === 'LUNAS' ? new Date() : null, idPesanan]
     );
 
-    const [rows] = await pool.query('SELECT * FROM orders WHERE id = ?', [orderId]);
-    if (rows.length === 0) return res.status(404).json({ message: 'Pesanan tidak ditemukan' });
-
-    res.json(await getOrderWithItems(rows[0]));
+    const [updated] = await loadOrders('WHERE p.id_pesanan = ?', [idPesanan]);
+    res.json(updated);
   } catch (err) {
     res.status(500).json({ message: 'Gagal memperbarui status pembayaran', error: err.message });
   }
 });
 
-// DELETE /api/orders/:id - Hapus / batalkan pesanan dari Admin
+// DELETE /api/orders/:id - batalkan & hapus pesanan (Panel Admin)
+// Stok dikembalikan bila pesanan belum dikirim, dan dicatat di riwayat_stok.
 router.delete('/:id', async (req, res) => {
+  const conn = await pool.getConnection();
   try {
-    const orderId = decodeURIComponent(req.params.id);
-    await pool.query('DELETE FROM orders WHERE id = ?', [orderId]);
-    res.json({ message: 'Pesanan berhasil dihapus', id: orderId });
+    const idPesanan = await resolveIdPesanan(req.params.id, conn);
+    if (!idPesanan) {
+      conn.release();
+      return res.status(404).json({ message: 'Pesanan tidak ditemukan' });
+    }
+
+    await conn.beginTransaction();
+
+    const [[pesanan]] = await conn.query(
+      'SELECT nomor_pesanan, tahap FROM pesanan WHERE id_pesanan = ? FOR UPDATE',
+      [idPesanan]
+    );
+
+    if (pesanan.tahap === 'DIBUAT' || pesanan.tahap === 'DIPROSES') {
+      const [details] = await conn.query(
+        'SELECT id_produk, jumlah FROM detail_pesanan WHERE id_pesanan = ?',
+        [idPesanan]
+      );
+      const idAdmin = await getAdminId(conn);
+      for (const d of details) {
+        await conn.query('UPDATE produk SET stok = stok + ? WHERE id_produk = ?', [
+          d.jumlah,
+          d.id_produk,
+        ]);
+        await conn.query(
+          'INSERT INTO riwayat_stok (id_produk, id_admin, jumlah, catatan, waktu) VALUES (?, ?, ?, ?, ?)',
+          [d.id_produk, idAdmin, d.jumlah, `Pesanan ${pesanan.nomor_pesanan} dibatalkan`, new Date()]
+        );
+      }
+    }
+
+    // detail_pesanan, pengiriman, dan pembayaran ikut terhapus (ON DELETE CASCADE)
+    await conn.query('DELETE FROM pesanan WHERE id_pesanan = ?', [idPesanan]);
+    await conn.commit();
+
+    res.json({ message: 'Pesanan berhasil dihapus', id: `#${pesanan.nomor_pesanan}` });
   } catch (err) {
+    await conn.rollback();
     res.status(500).json({ message: 'Gagal menghapus pesanan', error: err.message });
+  } finally {
+    conn.release();
   }
 });
 

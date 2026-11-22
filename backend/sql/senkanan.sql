@@ -7,6 +7,7 @@
 DROP DATABASE IF EXISTS senkanan;
 CREATE DATABASE senkanan CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE senkanan;
+SET NAMES utf8mb4;   -- pastikan karakter seperti "•" tersimpan benar saat impor lewat CLI
 
 -- ---------- Akun ----------
 CREATE TABLE admin (
@@ -30,7 +31,9 @@ CREATE TABLE motor_pengguna (
     nama_pemilik  VARCHAR(100),
     merek         VARCHAR(50),
     tipe_model    VARCHAR(100),
-    plat_nomor    VARCHAR(15),
+    plat_nomor    VARCHAR(15) NOT NULL,   -- tersimpan dalam bentuk normalisasi (huruf besar, tanpa spasi/simbol)
+    CONSTRAINT uq_motor_plat UNIQUE (plat_nomor),   -- mencegah duplikasi data motor
+    CONSTRAINT chk_motor_plat CHECK (plat_nomor REGEXP '^[A-Z0-9]{1,15}$'),
     CONSTRAINT fk_motor_pelanggan FOREIGN KEY (id_pelanggan)
         REFERENCES pelanggan(id_pelanggan) ON UPDATE CASCADE ON DELETE CASCADE
 ) ENGINE=InnoDB;
@@ -225,3 +228,33 @@ FROM pesanan p
 LEFT JOIN (SELECT id_pesanan, SUM(jumlah * harga_satuan) AS subtotal
            FROM detail_pesanan GROUP BY id_pesanan) s ON s.id_pesanan = p.id_pesanan
 LEFT JOIN pengiriman g ON g.id_pesanan = p.id_pesanan;
+
+-- =====================================================
+-- DATA AWAL (seed) - sesuai katalog di senkanan-app
+-- =====================================================
+
+-- Admin bawaan (login admin di program masih simulasi; hash scrypt format salt$hash)
+INSERT INTO admin (nama_admin, email, kata_sandi) VALUES
+  ('Admin SENkanan', 'admin@senkanan.local', 'scrypt$5689b60b853722e3$826295c378236418fbf70a2adfc6e21b4fcdf3a323d32825590401b7956278bc');
+
+-- Pelanggan bawaan: program belum punya login pelanggan, jadi dipakai pelanggan "tamu"
+INSERT INTO pelanggan (nama, email) VALUES
+  ('Pelanggan SENkanan', 'tamu@senkanan.local');
+
+INSERT INTO kategori_produk (nama_kategori, deskripsi, ikon) VALUES
+  ('Lampu dan sein', 'Terang & lebih terlihat', 'bulb'),
+  ('Pengereman', 'Kontrol di setiap jalan', 'brake'),
+  ('Kelistrikan', 'Daya untuk perjalanan', 'battery'),
+  ('Aksesori motor', 'Detail sesuai gayamu', 'handlebar'),
+  ('Mesin dan komponen', 'Jaga performa motor', 'gear');
+
+-- stok: Tersedia > 5, Terbatas 1-5, Habis 0
+INSERT INTO produk (id_kategori, sku, nama_produk, spesifikasi, label, kecocokan, deskripsi, harga, stok, gambar) VALUES
+  (1, 'sein-led-sequential', 'Sein LED Sequential Mini', 'Universal • Sepasang • 12V', 'PILIHAN SENKANAN', 'Cocok untuk motor matic, bebek, dan sport dengan dudukan baut sein standar M10.', 'Lampu sein LED model running sequential dengan cahaya amber terang agar sinyal belok lebih mudah terlihat siang maupun malam.', 85000, 20, '/images/product-1.jpg'),
+  (2, 'kampas-rem-cakram', 'Kampas Rem Cakram Depan', 'Vario 125/150 • Set depan', NULL, 'Vario 125, Vario 150, Beat FI, Scoopy, dan kaliper depan 1 piston sejenis.', 'Kampas rem cakram depan dengan daya cengkeram stabil untuk penggunaan harian dalam kota maupun perjalanan jauh.', 45000, 20, '/images/product-2.jpg'),
+  (4, 'spion-bar-end-cnc', 'Spion Bar End CNC', 'Universal • Sepasang • Hitam', 'FAVORIT UPGRADE', 'Stang berlubang diameter dalam 13-18 mm (matic, naked, retro, dan sport).', 'Spion ujung stang berbahan aluminium CNC hitam matte dengan kaca cembung anti-silau untuk tampilan rapi dan visibilitas luas.', 175000, 20, '/images/product-3.jpg'),
+  (5, 'busi-iridium-performance', 'Busi Iridium Performance', 'Matic 110-150cc • 1 buah', NULL, 'Motor matic 110cc hingga 150cc (Vario, Beat, NMAX, Aerox, PCX, Mio).', 'Elektroda iridium ujung halus membantu pembakaran lebih fokus, tarikan awal responsif, dan umur pakai lebih panjang.', 95000, 20, '/images/product-4.jpg'),
+  (1, 'lampu-led-headlight-h4', 'Lampu LED Headlight H4', 'Soket H4 • Putih • 12V', NULL, 'Motor dengan reflektor utama soket H4 (Vixion, CB150R, Verza, Scoopy karbu, Vespa).', 'Lampu utama LED soket H4 dilengkapi kipas pendingin aluminium dan cut-off cahaya rapi agar tidak menyilaukan pengendara lawan arah.', 125000, 20, '/images/product-5.jpg'),
+  (2, 'piringan-cakram-220mm', 'Piringan Cakram 220 mm', 'Vario 125/150 • Stainless', NULL, 'Vario 125/150 lubang baut 4 (pemasangan plug and play ukuran standar 220 mm).', 'Rotor cakram floating look berbahan baja tahan karat dengan lubang ventilasi untuk pelepasan panas optimal saat pengereman berulang.', 185000, 3, '/images/product-6.jpg'),
+  (3, 'kiprok-regulator-4-pin', 'Kiprok Regulator 4 Pin', 'Bebek / matic • 12V', NULL, 'Sistem kelistrikan DC/AC 12V soket 4 pin pada motor bebek dan matic harian.', 'Regulator rectifier dengan sirip pendingin tebal untuk menjaga tegangan pengisian aki tetap stabil dan mencegah lampu putus.', 78000, 20, '/images/product-7.jpg'),
+  (4, 'handgrip-karet-sport', 'Handgrip Karet Sport', 'Universal • Sepasang • Hitam', NULL, 'Semua stang motor ukuran standar 22 mm (kanan selongsong gas, kiri stang).', 'Handgrip tekstur diamond anti-slip dengan cincin ujung aluminium anodized emas untuk genggaman mantap saat hujan maupun panas.', 65000, 20, '/images/product-8.jpg');
