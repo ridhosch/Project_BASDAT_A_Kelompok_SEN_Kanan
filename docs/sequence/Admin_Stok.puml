@@ -1,0 +1,26 @@
+@startuml
+title Sequence Diagram – Admin Mengelola Stok
+actor Admin
+participant StockPage
+participant "App (state)" as App
+
+Admin -> StockPage: Buka "Manajemen stok"
+StockPage --> Admin: Ringkasan (total produk, unit, per status) + daftar stok
+Admin -> StockPage: Cari nama/SKU, pilih kategori / tab status
+StockPage --> Admin: Daftar stok terfilter
+Admin -> StockPage: Pilih produk, isi jumlah & catatan, klik "Simpan penambahan stok"
+
+alt jumlah > 0
+    StockPage -> App: onAddStock(id_produk, jumlah, catatan)
+    App --> StockPage: setProducts(stok + jumlah); setStockLog(riwayat)
+    StockPage --> Admin: Toast: stok bertambah ... menjadi N unit
+else jumlah ≤ 0
+    StockPage --> Admin: Toast: "Masukkan jumlah penambahan lebih dari 0"
+end
+
+opt klik "Ekspor stok"
+    Admin -> StockPage: Klik "Ekspor stok"
+    StockPage -> App: onExport()
+    App --> Admin: Unduh stok-senkanan.csv (SKU, Produk, Kategori, Stok)
+end
+@enduml
