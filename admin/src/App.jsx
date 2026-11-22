@@ -150,7 +150,7 @@ export default function App() {
       const res = await fetch(`${apiBase}/products/${encodeURIComponent(productId)}/stock`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ qty }),
+        body: JSON.stringify({ qty, note }),
       });
       if (res.ok) {
         await fetchProductsFromDb();
